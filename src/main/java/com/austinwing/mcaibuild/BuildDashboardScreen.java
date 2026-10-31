@@ -29,7 +29,8 @@ public final class BuildDashboardScreen extends Screen {
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        renderBackground(context, mouseX, mouseY, delta);
+        // Avoid the blur pass: some launchers already blur the frame before rendering screens.
+        context.fill(0, 0, width, height, 0xA0000000);
         int panelWidth = Math.min(360, width - 24);
         int left = (width - panelWidth) / 2;
         int top = height / 2 - 92;
