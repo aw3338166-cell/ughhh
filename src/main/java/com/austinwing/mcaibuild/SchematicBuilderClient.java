@@ -1,0 +1,206 @@
+package com.austinwing.mcaibuild;
+
+import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.block.Block;
+import net.minecraft.block.BlockState;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.option.KeyBinding;
+import net.minecraft.item.ItemStack;
+import net.minecraft.registry.Registries;
+import net.minecraft.text.Text;
+import net.minecraft.util.ActionResult;
+import net.minecraft.util.Hand;
+import net.minecraft.util.Identifier;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.Vec3d;
+import org.lwjgl.glfw.GLFW;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Comparator;
+import java.util.List;
+
+public final class SchematicBuilderClient implements ClientModInitializer {
+    private static final Path SCHEMATIC_DIR = FabricLoader.getInstance().getConfigDir().resolve("minecraft-ai-build");
+    private static final int MAX_SKIP_PER_TICK = 64;
+
+    private static KeyBinding loadKey, startKey, pauseKey, stopKey, slowerKey, fasterKey;
+    private static SchematicData schematic;
+    private static BlockPos origin;
+    private static int index, delayTicks = 6, waitTicks, placed, skipped;
+    private static boolean running, paused;
+
+    @Override
+    public void onInitializeClient() {
+        KeyBinding.Category category = KeyBinding.Category.create(Identifier.of(MinecraftAIBuild.MOD_ID, "builder"));
+        loadKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.load_preview", GLFW.GLFW_KEY_F6, category));
+        startKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.start", GLFW.GLFW_KEY_F7, category));
+        pauseKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.pause", GLFW.GLFW_KEY_F8, category));
+        stopKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.stop", GLFW.GLFW_KEY_F9, category));
+        slowerKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.slower", GLFW.GLFW_KEY_LEFT_BRACKET, category));
+        fasterKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.faster", GLFW.GLFW_KEY_RIGHT_BRACKET, category));
+        ClientTickEvents.END_CLIENT_TICK.register(SchematicBuilderClient::tick);
+        try {
+            Files.createDirectories(SCHEMATIC_DIR);
+        } catch (IOException e) {
+            MinecraftAIBuild.LOGGER.error("Could not create schematic folder", e);
+        }
+        MinecraftAIBuild.LOGGER.info("Schematic builder controls registered.");
+    }
+
+    private static void tick(MinecraftClient client) {
+        if (client.player == null || client.world == null) return;
+        if (loadKey.wasPressed()) loadLatest(client);
+        if (startKey.wasPressed()) start(client);
+        if (pauseKey.wasPressed() && running) {
+            paused = !paused;
+            tell(client, paused ? "Builder paused." : "Builder resumed.");
+        }
+        if (stopKey.wasPressed() && running) {
+            running = false;
+            paused = false;
+            tell(client, "Builder stopped. Placed: " + placed + ", skipped: " + skipped + ".");
+        }
+        if (slowerKey.wasPressed()) {
+            delayTicks = Math.min(40, delayTicks + 1);
+            tell(client, "Build delay: " + delayTicks + " ticks per block.");
+        }
+        if (fasterKey.wasPressed()) {
+            delayTicks = Math.max(1, delayTicks - 1);
+            tell(client, "Build delay: " + delayTicks + " ticks per block.");
+        }
+        if (!running || paused || schematic == null || client.interactionManager == null) return;
+        if (waitTicks > 0) { waitTicks--; return; }
+        placeNext(client);
+    }
+
+    private static void loadLatest(MinecraftClient client) {
+        try {
+            Files.createDirectories(SCHEMATIC_DIR);
+            Path newest;
+            try (var paths = Files.list(SCHEMATIC_DIR)) {
+                newest = paths.filter(Files::isRegularFile)
+                        .filter(p -> {
+                            String n = p.getFileName().toString().toLowerCase();
+                            return n.endsWith(".schem") || n.endsWith(".litematic");
+                        })
+                        .max(Comparator.comparingLong(p -> p.toFile().lastModified()))
+                        .orElse(null);
+            }
+            if (newest == null) {
+                tell(client, "Put a .schem or .litematic file in " + SCHEMATIC_DIR + " then press F6.");
+                return;
+            }
+            schematic = SchematicReader.read(newest);
+            index = placed = skipped = 0;
+            running = paused = false;
+            tell(client, "Loaded " + schematic.name() + " — " + schematic.width() + "x" +
+                    schematic.height() + "x" + schematic.length() + ", " + schematic.blocks().size() +
+                    " non-air blocks. F7 starts; F6 reloads.");
+        } catch (Exception e) {
+            MinecraftAIBuild.LOGGER.error("Schematic load failed", e);
+            tell(client, "Could not load schematic: " + e.getMessage());
+        }
+    }
+
+    private static void start(MinecraftClient client) {
+        if (schematic == null) {
+            tell(client, "Load a schematic first with F6.");
+            return;
+        }
+        if (client.player.isSpectator()) {
+            tell(client, "Builder cannot run in spectator mode.");
+            return;
+        }
+        origin = client.player.getBlockPos().offset(client.player.getHorizontalFacing(), 3);
+        index = placed = skipped = 0;
+        waitTicks = 0;
+        paused = false;
+        running = true;
+        tell(client, "Building from " + origin.toShortString() +
+                ". Make sure you have materials and server permission. F8 pauses; F9 stops.");
+    }
+
+    private static void placeNext(MinecraftClient client) {
+        List<SchematicData.BlockEntry> blocks = schematic.blocks();
+        int examined = 0;
+        while (index < blocks.size() && examined++ < MAX_SKIP_PER_TICK) {
+            SchematicData.BlockEntry entry = blocks.get(index);
+            BlockPos target = origin.add(entry.x(), entry.y(), entry.z());
+            Block block = Registries.BLOCK.get(Identifier.of(entry.blockId()));
+            BlockState desired = block.getDefaultState();
+
+            if (block == net.minecraft.block.Blocks.AIR || !client.world.getBlockState(target).isReplaceable()) {
+                index++;
+                skipped++;
+                continue;
+            }
+
+            int slot = findHotbarItem(client, entry.blockId());
+            if (slot < 0) {
+                index++;
+                skipped++;
+                continue;
+            }
+
+            BlockHitResult hit = findSupport(client, target);
+            if (hit == null) {
+                index++;
+                skipped++;
+                continue;
+            }
+
+            client.player.getInventory().selectedSlot = slot;
+            ActionResult result = client.interactionManager.interactBlock(client.player, Hand.MAIN_HAND, hit);
+            if (result.isAccepted()) {
+                index++;
+                placed++;
+                waitTicks = delayTicks - 1;
+                return;
+            }
+
+            running = false;
+            tell(client, "Server/game rejected placement at " + target.toShortString() +
+                    ". Builder stopped; check permissions and placement rules.");
+            return;
+        }
+
+        if (index >= blocks.size()) {
+            running = false;
+            tell(client, "Build pass finished. Placed: " + placed + ", skipped: " + skipped +
+                    ". Some skipped blocks may need orientation/support or more materials.");
+        }
+    }
+
+    private static int findHotbarItem(MinecraftClient client, String blockId) {
+        for (int slot = 0; slot < 9; slot++) {
+            ItemStack stack = client.player.getInventory().getStack(slot);
+            if (!stack.isEmpty() && Registries.ITEM.getId(stack.getItem()).toString().equals(blockId)) return slot;
+        }
+        return -1;
+    }
+
+    private static BlockHitResult findSupport(MinecraftClient client, BlockPos target) {
+        for (Direction direction : Direction.values()) {
+            BlockPos neighbor = target.offset(direction);
+            BlockState state = client.world.getBlockState(neighbor);
+            Direction face = direction.getOpposite();
+            if (state.isSideSolidFullSquare(client.world, neighbor, face)) {
+                Vec3d point = Vec3d.ofCenter(neighbor).add(
+                        face.getOffsetX() * 0.5, face.getOffsetY() * 0.5, face.getOffsetZ() * 0.5);
+                return new BlockHitResult(point, face, neighbor, false);
+            }
+        }
+        return null;
+    }
+
+    private static void tell(MinecraftClient client, String message) {
+        if (client.player != null) client.player.sendMessage(Text.literal("[AI Build] " + message), false);
+    }
+}
