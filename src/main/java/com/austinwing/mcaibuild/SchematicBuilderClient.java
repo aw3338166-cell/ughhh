@@ -166,7 +166,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
                 continue;
             }
 
-            client.player.getInventory().selectedSlot = slot;
+            client.player.getInventory().setSelectedSlot(slot);
             ActionResult result = client.interactionManager.interactBlock(client.player, Hand.MAIN_HAND, hit);
             if (result.isAccepted()) {
                 index++;
