@@ -1,33 +1,37 @@
 # Minecraft AI Build — Fabric 1.21.11
 
-Starter GitHub project for a Java 21 / Fabric 1.21.11 mod.
+A client-side schematic building assistant for Minecraft Java 1.21.11 / Fabric / Java 21.
 
-## Build automatically on GitHub
+## Feature branch
 
-1. Create a new GitHub repository.
-2. Upload the **contents** of this folder (not the enclosing ZIP file).
-3. Commit the files to the `main` branch.
-4. Open the repository's **Actions** tab.
-5. Select **Build Fabric Mod**. GitHub Actions will compile the project.
-6. When the run finishes, open the successful workflow run and download the
-   `minecraft-ai-build-jar` artifact.
+- Read-only NBT parsing for Sponge `.schem` and Litematica `.litematic` files.
+- Loads the newest schematic from `config/minecraft-ai-build/`.
+- Chat preview summary with dimensions and non-air block count.
+- Start, pause/resume, stop, and adjustable pacing controls.
+- Hotbar-only material matching and ordinary Minecraft block interactions.
+- Server protections remain authoritative; the mod does not bypass claims, permissions, reach, or server rules.
 
-The built JAR is created under `build/libs/` by Gradle and uploaded as a
-workflow artifact. The workflow runs on every push and pull request.
+## Install and use
 
-## Current status
+1. Build the mod using the repository's GitHub Actions workflow.
+2. Put one `.schem` or `.litematic` file in `config/minecraft-ai-build/`.
+3. Join a world/server where you have permission to build.
+4. Stand where you want the front-left-bottom corner of the build, facing the build direction. The builder starts three blocks in front of you.
+5. Press **F6** to load the newest schematic and see its dimensions/block count.
+6. Put the needed block items in your **hotbar**.
+7. Press **F7** to start.
+8. Press **F8** to pause/resume, **F9** to stop, **[** to slow down, and **]** to speed up.
 
-This is a build-project starter, not the completed AI builder. It includes a
-Fabric entrypoint and a GitHub Actions build workflow. It does **not** yet
-implement AI planning, Litematica/Sponge schematic import, pathfinding,
-material gathering, construction pacing, a settings screen, or multiplayer
-permission enforcement. Those features need to be added and tested before
-using it on a server.
+Rebind keys in Options → Controls → Key Binds → Minecraft AI Build.
 
-## Local build (optional)
+## Current limitations
 
-Requires JDK 21 and Gradle 8.14.3:
+- This is a deterministic client-side builder, not an AI planner.
+- Preview is a chat summary, not a 3D ghost-render preview.
+- Block states such as stair direction, door halves, signs, containers, and block-entity data are not restored; blocks use default states.
+- It places only blocks whose matching item is present in the hotbar.
+- It skips occupied positions and positions without a solid neighboring face, and stops if the server rejects a placement.
+- Some special blocks need orientation, water, redstone, or multi-step placement and may be skipped.
+- Test in a creative test world or a server where you have permission before using a valuable build.
 
-```bash
-gradle build
-```
+The builder uses normal player interactions. Server protections remain authoritative.
