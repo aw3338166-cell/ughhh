@@ -4,7 +4,7 @@ A client-side schematic building assistant for Minecraft Java 1.21.11 / Fabric /
 
 ## Feature branch
 
-- Read-only NBT parsing for Sponge `.schem` and Litematica `.litematic` files.
+- Read-only NBT parsing for Sponge `.schem` v2/v3 and Litematica `.litematic` files.
 - Loads the newest schematic from `config/minecraft-ai-build/`.
 - Chat preview summary with dimensions and non-air block count.
 - Start, pause/resume, stop, and adjustable pacing controls.
