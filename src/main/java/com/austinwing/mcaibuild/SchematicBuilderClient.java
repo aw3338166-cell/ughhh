@@ -34,7 +34,8 @@ import java.io.OutputStream;
 
 public final class SchematicBuilderClient implements ClientModInitializer {
     private static final Path SCHEMATIC_DIR = FabricLoader.getInstance().getConfigDir().resolve("minecraft-ai-build");
-    private static final int MAX_SKIP_PER_TICK = 64;\n    private static final Path RECOVERY_FILE = SCHEMATIC_DIR.resolve("build-progress.properties");
+    private static final int MAX_SKIP_PER_TICK = 64;
+    private static final Path RECOVERY_FILE = SCHEMATIC_DIR.resolve("build-progress.properties");
 
     private static KeyBinding loadKey, startKey, pauseKey, stopKey, slowerKey, fasterKey, materialsKey, dashboardKey;
     private static SchematicData schematic;
@@ -51,7 +52,8 @@ public final class SchematicBuilderClient implements ClientModInitializer {
         stopKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.stop", GLFW.GLFW_KEY_F9, category));
         slowerKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.slower", GLFW.GLFW_KEY_LEFT_BRACKET, category));
         fasterKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.faster", GLFW.GLFW_KEY_RIGHT_BRACKET, category));
-        materialsKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.materials", GLFW.GLFW_KEY_M, category));\n        dashboardKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.dashboard", GLFW.GLFW_KEY_H, category));
+        materialsKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.materials", GLFW.GLFW_KEY_M, category));
+        dashboardKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.dashboard", GLFW.GLFW_KEY_H, category));
         ClientTickEvents.END_CLIENT_TICK.register(SchematicBuilderClient::tick);
         try {
             Files.createDirectories(SCHEMATIC_DIR);
@@ -86,6 +88,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
             if (schematic == null) tell(client, "Load a schematic first with F6.");
             else client.setScreen(new MaterialListScreen(schematic));
         }
+        if (dashboardKey.wasPressed() && client.currentScreen == null) client.setScreen(new BuildDashboardScreen());
         if (client.currentScreen != null) return;
         if (!running || paused || schematic == null || client.interactionManager == null) return;
         if (waitTicks > 0) { waitTicks--; return; }
@@ -112,6 +115,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
             schematic = SchematicReader.read(newest);
             index = placed = skipped = 0;
             running = paused = false;
+            clearRecovery();
             tell(client, "Loaded " + schematic.name() + " — " + schematic.width() + "x" +
                     schematic.height() + "x" + schematic.length() + ", " + schematic.blocks().size() +
                     " non-air blocks. F7 starts; F6 reloads.");
@@ -132,7 +136,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
             return;
         }
         origin = client.player.getBlockPos().offset(client.player.getHorizontalFacing(), 3);
-        index = placed = skipped = 0;
+        if (!restoreRecovery(client)) index = placed = skipped = 0;
         waitTicks = 0;
         paused = false;
         running = true;
@@ -180,6 +184,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
             if (result.isAccepted()) {
                 index++;
                 placed++;
+                saveRecovery();
                 waitTicks = delayTicks - 1;
                 return;
             }
@@ -192,6 +197,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
 
         if (index >= blocks.size()) {
             running = false;
+            clearRecovery();
             tell(client, "Build pass finished. Placed: " + placed + ", skipped: " + skipped +
                     ". Some skipped blocks may need orientation/support or more materials.");
         }
@@ -235,6 +241,87 @@ public final class SchematicBuilderClient implements ClientModInitializer {
             }
         }
         return null;
+    }
+
+
+    public static void dashboardStart() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.player != null && client.world != null) start(client);
+    }
+
+    public static void dashboardPause() {
+        if (running) {
+            paused = !paused;
+            tell(MinecraftClient.getInstance(), paused ? "Builder paused." : "Builder resumed.");
+        }
+    }
+
+    public static void dashboardStop() {
+        running = false;
+        paused = false;
+        tell(MinecraftClient.getInstance(), "Builder stopped. Saved progress can be resumed with F7.");
+    }
+
+    public static String dashboardSchematicName() {
+        return schematic == null ? "None loaded" : schematic.name();
+    }
+
+    public static String dashboardStatus() {
+        return running ? (paused ? "Paused" : "Building") : (schematic == null ? "Idle" : "Ready / stopped");
+    }
+
+    public static String dashboardProgress() {
+        if (schematic == null) return "0 / 0";
+        return Math.min(index, schematic.blocks().size()) + " / " + schematic.blocks().size()
+                + " | placed " + placed + " | skipped " + skipped;
+    }
+
+    private static void saveRecovery() {
+        if (schematic == null || origin == null) return;
+        try {
+            Files.createDirectories(SCHEMATIC_DIR);
+            Properties data = new Properties();
+            data.setProperty("schematic", schematic.name());
+            data.setProperty("x", Integer.toString(origin.getX()));
+            data.setProperty("y", Integer.toString(origin.getY()));
+            data.setProperty("z", Integer.toString(origin.getZ()));
+            data.setProperty("index", Integer.toString(index));
+            data.setProperty("placed", Integer.toString(placed));
+            data.setProperty("skipped", Integer.toString(skipped));
+            try (OutputStream out = Files.newOutputStream(RECOVERY_FILE)) {
+                data.store(out, "Minecraft AI Build recovery state");
+            }
+        } catch (IOException e) {
+            MinecraftAIBuild.LOGGER.warn("Could not save build recovery state", e);
+        }
+    }
+
+    private static boolean restoreRecovery(MinecraftClient client) {
+        if (schematic == null || !Files.isRegularFile(RECOVERY_FILE)) return false;
+        try (InputStream in = Files.newInputStream(RECOVERY_FILE)) {
+            Properties data = new Properties();
+            data.load(in);
+            if (!schematic.name().equals(data.getProperty("schematic"))) return false;
+            origin = new BlockPos(Integer.parseInt(data.getProperty("x")),
+                    Integer.parseInt(data.getProperty("y")), Integer.parseInt(data.getProperty("z")));
+            index = Math.max(0, Math.min(schematic.blocks().size(), Integer.parseInt(data.getProperty("index"))));
+            placed = Math.max(0, Integer.parseInt(data.getProperty("placed", "0")));
+            skipped = Math.max(0, Integer.parseInt(data.getProperty("skipped", "0")));
+            tell(client, "Recovered build progress: " + index + " / " + schematic.blocks().size()
+                    + ". Continuing from saved position.");
+            return true;
+        } catch (Exception e) {
+            MinecraftAIBuild.LOGGER.warn("Could not restore build recovery state", e);
+            return false;
+        }
+    }
+
+    private static void clearRecovery() {
+        try {
+            Files.deleteIfExists(RECOVERY_FILE);
+        } catch (IOException e) {
+            MinecraftAIBuild.LOGGER.warn("Could not clear build recovery state", e);
+        }
     }
 
     private static void tell(MinecraftClient client, String message) {
