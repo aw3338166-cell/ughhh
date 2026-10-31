@@ -33,7 +33,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
     private static final Path SCHEMATIC_DIR = FabricLoader.getInstance().getConfigDir().resolve("minecraft-ai-build");
     private static final int MAX_SKIP_PER_TICK = 64;
 
-    private static KeyBinding loadKey, startKey, pauseKey, stopKey, slowerKey, fasterKey;
+    private static KeyBinding loadKey, startKey, pauseKey, stopKey, slowerKey, fasterKey, materialsKey;
     private static SchematicData schematic;
     private static BlockPos origin;
     private static int index, delayTicks = 6, waitTicks, placed, skipped;
@@ -48,6 +48,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
         stopKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.stop", GLFW.GLFW_KEY_F9, category));
         slowerKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.slower", GLFW.GLFW_KEY_LEFT_BRACKET, category));
         fasterKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.faster", GLFW.GLFW_KEY_RIGHT_BRACKET, category));
+        materialsKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.materials", GLFW.GLFW_KEY_M, category));
         ClientTickEvents.END_CLIENT_TICK.register(SchematicBuilderClient::tick);
         try {
             Files.createDirectories(SCHEMATIC_DIR);
@@ -78,6 +79,11 @@ public final class SchematicBuilderClient implements ClientModInitializer {
             delayTicks = Math.max(1, delayTicks - 1);
             tell(client, "Build delay: " + delayTicks + " ticks per block.");
         }
+        if (materialsKey.wasPressed()) {
+            if (schematic == null) tell(client, "Load a schematic first with F6.");
+            else client.setScreen(new MaterialListScreen(schematic));
+        }
+        if (client.currentScreen != null) return;
         if (!running || paused || schematic == null || client.interactionManager == null) return;
         if (waitTicks > 0) { waitTicks--; return; }
         placeNext(client);
