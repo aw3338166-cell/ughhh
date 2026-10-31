@@ -28,12 +28,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.ArrayList;
+import java.util.Properties;
+import java.io.InputStream;
+import java.io.OutputStream;
 
 public final class SchematicBuilderClient implements ClientModInitializer {
     private static final Path SCHEMATIC_DIR = FabricLoader.getInstance().getConfigDir().resolve("minecraft-ai-build");
-    private static final int MAX_SKIP_PER_TICK = 64;
+    private static final int MAX_SKIP_PER_TICK = 64;\n    private static final Path RECOVERY_FILE = SCHEMATIC_DIR.resolve("build-progress.properties");
 
-    private static KeyBinding loadKey, startKey, pauseKey, stopKey, slowerKey, fasterKey, materialsKey;
+    private static KeyBinding loadKey, startKey, pauseKey, stopKey, slowerKey, fasterKey, materialsKey, dashboardKey;
     private static SchematicData schematic;
     private static BlockPos origin;
     private static int index, delayTicks = 6, waitTicks, placed, skipped;
@@ -48,7 +51,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
         stopKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.stop", GLFW.GLFW_KEY_F9, category));
         slowerKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.slower", GLFW.GLFW_KEY_LEFT_BRACKET, category));
         fasterKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.faster", GLFW.GLFW_KEY_RIGHT_BRACKET, category));
-        materialsKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.materials", GLFW.GLFW_KEY_M, category));
+        materialsKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.materials", GLFW.GLFW_KEY_M, category));\n        dashboardKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.dashboard", GLFW.GLFW_KEY_H, category));
         ClientTickEvents.END_CLIENT_TICK.register(SchematicBuilderClient::tick);
         try {
             Files.createDirectories(SCHEMATIC_DIR);
