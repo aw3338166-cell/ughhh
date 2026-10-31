@@ -6,5 +6,6 @@
   "key.minecraft_ai_build.stop": "Stop building",
   "key.minecraft_ai_build.slower": "Build slower",
   "key.minecraft_ai_build.faster": "Build faster",
-  "key.minecraft_ai_build.materials": "Open build materials GUI"
+  "key.minecraft_ai_build.materials": "Open build materials GUI",
+  "key.minecraft_ai_build.dashboard": "Open build dashboard"
 }
