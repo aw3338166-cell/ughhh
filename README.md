@@ -22,14 +22,14 @@ A client-side schematic building assistant for Minecraft Java 1.21.11 / Fabric /
 7. Press **F7** to start.
 8. Press **F8** to pause/resume, **F9** to stop, **[** to slow down, and **]** to speed up.
 
-Rebind keys in Options → Controls → Key Binds → Minecraft AI Build.
+Additional controls:\n\n- **M** opens the Materials list.\n- **H** opens the Build Dashboard.\n- **R** rotates the schematic placement by 90 degrees (position rotation only).\n- **L** toggles layer-by-layer mode; **Page Up / Page Down** selects the layer.\n- Build progress is saved after successful placements and can be resumed with F7 after restarting, as long as the same schematic is loaded.\n\nRebind keys in Options → Controls → Key Binds → Minecraft AI Build.
 
 ## Current limitations
 
 - This is a deterministic client-side builder, not an AI planner.
-- Preview is a chat summary, not a 3D ghost-render preview.
+- Blueprint ghost rendering is not implemented yet; preview is still a chat summary.\n- Rotation currently changes block coordinates only; directional block states are not rotated.
 - Block states such as stair direction, door halves, signs, containers, and block-entity data are not restored; blocks use default states.
-- It places only blocks whose matching item is present in the hotbar.
+- It places only blocks whose matching item is present in the hotbar.\n- Chest withdrawal, scaffold-assisted movement, and automatic undo are not implemented yet.
 - It skips occupied positions and positions without a solid neighboring face, and stops if the server rejects a placement.
 - Some special blocks need orientation, water, redstone, or multi-step placement and may be skipped.
 - Test in a creative test world or a server where you have permission before using a valuable build.
