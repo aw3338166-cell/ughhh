@@ -55,6 +55,10 @@ public final class MaterialListScreen extends Screen {
                 .dimensions(left + 14, top + panelHeight - 28, 90, 20).build());
         addDrawableChild(ButtonWidget.builder(Text.literal("Close"), button -> close())
                 .dimensions(left + panelWidth - 104, top + panelHeight - 28, 90, 20).build());
+
+        // Screen.client is assigned by Minecraft before init(); populate inventory now,
+        // not in the constructor where client/player may still be null.
+        refreshRows();
     }
 
     private void refreshRows() {
