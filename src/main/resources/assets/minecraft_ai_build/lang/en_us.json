@@ -1,0 +1,9 @@
+{
+  "key.category.minecraft_ai_build.builder": "Minecraft AI Build",
+  "key.minecraft_ai_build.load_preview": "Load latest schematic / preview summary",
+  "key.minecraft_ai_build.start": "Start building",
+  "key.minecraft_ai_build.pause": "Pause / resume building",
+  "key.minecraft_ai_build.stop": "Stop building",
+  "key.minecraft_ai_build.slower": "Build slower",
+  "key.minecraft_ai_build.faster": "Build faster"
+}
