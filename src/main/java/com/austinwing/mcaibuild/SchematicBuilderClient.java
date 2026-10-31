@@ -79,7 +79,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
             delayTicks = Math.max(1, delayTicks - 1);
             tell(client, "Build delay: " + delayTicks + " ticks per block.");
         }
-        if (materialsKey.wasPressed()) {
+        if (materialsKey.wasPressed() && client.currentScreen == null) {
             if (schematic == null) tell(client, "Load a schematic first with F6.");
             else client.setScreen(new MaterialListScreen(schematic));
         }
