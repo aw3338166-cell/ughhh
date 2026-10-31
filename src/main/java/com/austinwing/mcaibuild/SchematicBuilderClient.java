@@ -25,6 +25,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.ArrayList;
 
 public final class SchematicBuilderClient implements ClientModInitializer {
     private static final Path SCHEMATIC_DIR = FabricLoader.getInstance().getConfigDir().resolve("minecraft-ai-build");
@@ -103,6 +106,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
             tell(client, "Loaded " + schematic.name() + " — " + schematic.width() + "x" +
                     schematic.height() + "x" + schematic.length() + ", " + schematic.blocks().size() +
                     " non-air blocks. F7 starts; F6 reloads.");
+            showMaterialPreview(client);
         } catch (Exception e) {
             MinecraftAIBuild.LOGGER.error("Schematic load failed", e);
             tell(client, "Could not load schematic: " + e.getMessage());
@@ -136,9 +140,15 @@ public final class SchematicBuilderClient implements ClientModInitializer {
             Block block = Registries.BLOCK.get(Identifier.of(entry.blockId()));
             BlockState desired = block.getDefaultState();
 
-            if (block == net.minecraft.block.Blocks.AIR || !client.world.getBlockState(target).isReplaceable()) {
+            if (block == net.minecraft.block.Blocks.AIR) {
                 index++;
                 skipped++;
+                continue;
+            }
+            BlockState existing = client.world.getBlockState(target);
+            if (!existing.isReplaceable()) {
+                if (!existing.isOf(block)) skipped++;
+                index++;
                 continue;
             }
 
@@ -176,6 +186,24 @@ public final class SchematicBuilderClient implements ClientModInitializer {
             tell(client, "Build pass finished. Placed: " + placed + ", skipped: " + skipped +
                     ". Some skipped blocks may need orientation/support or more materials.");
         }
+    }
+
+    private static void showMaterialPreview(MinecraftClient client) {
+        Map<String, Integer> required = new HashMap<>();
+        for (SchematicData.BlockEntry entry : schematic.blocks()) required.merge(entry.blockId(), 1, Integer::sum);
+        List<String> missing = new ArrayList<>();
+        for (Map.Entry<String, Integer> entry : required.entrySet()) {
+            int available = 0;
+            for (int slot = 0; slot < 9; slot++) {
+                ItemStack stack = client.player.getInventory().getStack(slot);
+                if (!stack.isEmpty() && Registries.ITEM.getId(stack.getItem()).toString().equals(entry.getKey())) available += stack.getCount();
+            }
+            int shortBy = entry.getValue() - available;
+            if (shortBy > 0) missing.add(entry.getKey() + " x" + shortBy);
+        }
+        missing.sort(String::compareTo);
+        if (missing.isEmpty()) tell(client, "Hotbar material check: all required block items appear available.");
+        else tell(client, "Hotbar shortages (first 8): " + String.join(", ", missing.subList(0, Math.min(8, missing.size()))) + (missing.size() > 8 ? " ... and " + (missing.size() - 8) + " more types." : ""));
     }
 
     private static int findHotbarItem(MinecraftClient client, String blockId) {
