@@ -7,5 +7,9 @@
   "key.minecraft_ai_build.slower": "Build slower",
   "key.minecraft_ai_build.faster": "Build faster",
   "key.minecraft_ai_build.materials": "Open build materials GUI",
-  "key.minecraft_ai_build.dashboard": "Open build dashboard"
+  "key.minecraft_ai_build.dashboard": "Open build dashboard",
+  "key.minecraft_ai_build.rotate": "Rotate schematic 90 degrees",
+  "key.minecraft_ai_build.layer_mode": "Toggle layer-by-layer building",
+  "key.minecraft_ai_build.layer_up": "Select next build layer",
+  "key.minecraft_ai_build.layer_down": "Select previous build layer"
 }
