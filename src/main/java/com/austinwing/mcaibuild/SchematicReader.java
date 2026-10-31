@@ -44,8 +44,10 @@ public final class SchematicReader {
         int height = number(root.get("Height"), -1);
         int length = number(root.get("Length"), -1);
         checkVolume(width, height, length);
-        Object paletteObject = root.get("Palette");
-        Object dataObject = root.get("BlockData");
+        Map<?, ?> blockContainer = root.get("Blocks") instanceof Map<?, ?> nestedBlocks ? nestedBlocks : root;
+        Object paletteObject = blockContainer.get("Palette");
+        Object dataObject = blockContainer.get("BlockData");
+        if (dataObject == null) dataObject = blockContainer.get("Data");
         if (!(paletteObject instanceof Map<?, ?> palette) || !(dataObject instanceof byte[] data))
             throw new IOException("This .schem file is missing Sponge Palette or BlockData data.");
 
