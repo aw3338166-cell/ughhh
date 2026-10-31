@@ -3,12 +3,13 @@
   "id": "minecraft_ai_build",
   "version": "${version}",
   "name": "Minecraft AI Build",
-  "description": "A permission-aware building assistant foundation for Fabric.",
-  "authors": ["Project contributors"],
+  "description": "A client-side schematic building assistant for Fabric.",
+  "authors": ["Austin Wing"],
   "license": "MIT",
   "environment": "*",
   "entrypoints": {
-    "main": ["com.austinwing.mcaibuild.MinecraftAIBuild"]
+    "main": ["com.austinwing.mcaibuild.MinecraftAIBuild"],
+    "client": ["com.austinwing.mcaibuild.SchematicBuilderClient"]
   },
   "depends": {
     "fabricloader": ">=0.18.0",
