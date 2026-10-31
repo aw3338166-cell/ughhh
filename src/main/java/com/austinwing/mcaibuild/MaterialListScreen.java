@@ -110,7 +110,8 @@ public final class MaterialListScreen extends Screen {
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float deltaTicks) {
-        renderBackground(context, mouseX, mouseY, deltaTicks);
+        // Avoid Screen.renderBackground blur: Dawn's screen pipeline may already blur this frame.
+        context.fill(0, 0, width, height, 0xA0000000);
         panelWidth = Math.min(500, width - 30);
         panelHeight = Math.min(390, height - 30);
         left = (width - panelWidth) / 2;
