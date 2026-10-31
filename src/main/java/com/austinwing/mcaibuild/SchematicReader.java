@@ -13,10 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.zip.GZIPInputStream;
 
-/**
- * Small read-only NBT reader for Sponge .schem v2/v3 and Litematica .litematic.
- * It deliberately does not write schematic files or modify the world.
- */
+/** Read-only NBT parser for Sponge .schem v2/v3 and Litematica .litematic files. */
 public final class SchematicReader {
     private static final int MAX_BLOCKS = 1_500_000;
     private SchematicReader() {}
@@ -63,13 +60,11 @@ public final class SchematicReader {
         for (int i = 0; i < volume; i++) {
             int paletteId = readVarInt(data, cursor);
             String id = ids.get(paletteId);
-            if (id == null) continue;
-            if (!isAir(id)) {
-                int x = i % width;
-                int z = (i / width) % length;
-                int y = i / (width * length);
-                blocks.add(new SchematicData.BlockEntry(x, y, z, id));
-            }
+            if (id == null || isAir(id)) continue;
+            int x = i % width;
+            int z = (i / width) % length;
+            int y = i / (width * length);
+            blocks.add(new SchematicData.BlockEntry(x, y, z, id));
         }
         return new SchematicData(path.getFileName().toString(), width, height, length, List.copyOf(blocks));
     }
@@ -132,15 +127,15 @@ public final class SchematicReader {
         return new SchematicData(path.getFileName().toString(), width, height, length, List.copyOf(blocks));
     }
 
+    /** Litematica packs floor(64 / bits) values into each long; values never straddle longs. */
     private static int readPacked(long[] data, int index, int bits) {
-        long bitIndex = (long) index * bits;
-        int word = (int) (bitIndex >>> 6);
-        int offset = (int) (bitIndex & 63);
+        int valuesPerLong = 64 / bits;
+        int word = index / valuesPerLong;
+        int slot = index % valuesPerLong;
         if (word >= data.length) return -1;
-        long value = data[word] >>> offset;
-        if (offset + bits > 64 && word + 1 < data.length) value |= data[word + 1] << (64 - offset);
+        int offset = slot * bits;
         long mask = (1L << bits) - 1L;
-        return (int) (value & mask);
+        return (int) ((data[word] >>> offset) & mask);
     }
 
     private static int readVarInt(byte[] bytes, int[] cursor) throws IOException {
