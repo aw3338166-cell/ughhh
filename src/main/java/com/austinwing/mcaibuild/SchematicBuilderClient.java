@@ -41,7 +41,8 @@ public final class SchematicBuilderClient implements ClientModInitializer {
     private static SchematicData schematic;
     private static BlockPos origin;
     private static int index, delayTicks = 6, waitTicks, placed, skipped;
-    private static boolean running, paused, layerMode;\n    private static int rotation, selectedLayer;
+    private static boolean running, paused, layerMode;
+    private static int rotation, selectedLayer;
 
     @Override
     public void onInitializeClient() {
@@ -53,7 +54,11 @@ public final class SchematicBuilderClient implements ClientModInitializer {
         slowerKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.slower", GLFW.GLFW_KEY_LEFT_BRACKET, category));
         fasterKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.faster", GLFW.GLFW_KEY_RIGHT_BRACKET, category));
         materialsKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.materials", GLFW.GLFW_KEY_M, category));
-        dashboardKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.dashboard", GLFW.GLFW_KEY_H, category));\n        rotateKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.rotate", GLFW.GLFW_KEY_R, category));\n        layerModeKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.layer_mode", GLFW.GLFW_KEY_L, category));\n        layerUpKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.layer_up", GLFW.GLFW_KEY_PAGE_UP, category));\n        layerDownKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.layer_down", GLFW.GLFW_KEY_PAGE_DOWN, category));
+        dashboardKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.dashboard", GLFW.GLFW_KEY_H, category));
+        rotateKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.rotate", GLFW.GLFW_KEY_R, category));
+        layerModeKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.layer_mode", GLFW.GLFW_KEY_L, category));
+        layerUpKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.layer_up", GLFW.GLFW_KEY_PAGE_UP, category));
+        layerDownKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.layer_down", GLFW.GLFW_KEY_PAGE_DOWN, category));
         ClientTickEvents.END_CLIENT_TICK.register(SchematicBuilderClient::tick);
         try {
             Files.createDirectories(SCHEMATIC_DIR);
@@ -88,7 +93,11 @@ public final class SchematicBuilderClient implements ClientModInitializer {
             if (schematic == null) tell(client, "Load a schematic first with F6.");
             else client.setScreen(new MaterialListScreen(schematic));
         }
-        if (dashboardKey.wasPressed() && client.currentScreen == null) client.setScreen(new BuildDashboardScreen());\n        if (rotateKey.wasPressed()) { rotation = (rotation + 1) % 4; tell(client, "Schematic rotation: " + (rotation * 90) + " degrees."); }\n        if (layerModeKey.wasPressed()) { layerMode = !layerMode; tell(client, "Layer-by-layer mode " + (layerMode ? "enabled" : "disabled") + "."); }\n        if (schematic != null && layerUpKey.wasPressed()) { selectedLayer = Math.min(schematic.height() - 1, selectedLayer + 1); tell(client, "Selected layer: " + selectedLayer + " / " + (schematic.height() - 1)); }\n        if (schematic != null && layerDownKey.wasPressed()) { selectedLayer = Math.max(0, selectedLayer - 1); tell(client, "Selected layer: " + selectedLayer + " / " + (schematic.height() - 1)); }
+        if (dashboardKey.wasPressed() && client.currentScreen == null) client.setScreen(new BuildDashboardScreen());
+        if (rotateKey.wasPressed()) { rotation = (rotation + 1) % 4; tell(client, "Schematic rotation: " + (rotation * 90) + " degrees."); }
+        if (layerModeKey.wasPressed()) { layerMode = !layerMode; tell(client, "Layer-by-layer mode " + (layerMode ? "enabled" : "disabled") + "."); }
+        if (schematic != null && layerUpKey.wasPressed()) { selectedLayer = Math.min(schematic.height() - 1, selectedLayer + 1); tell(client, "Selected layer: " + selectedLayer + " / " + (schematic.height() - 1)); }
+        if (schematic != null && layerDownKey.wasPressed()) { selectedLayer = Math.max(0, selectedLayer - 1); tell(client, "Selected layer: " + selectedLayer + " / " + (schematic.height() - 1)); }
         if (client.currentScreen != null) return;
         if (!running || paused || schematic == null || client.interactionManager == null) return;
         if (waitTicks > 0) { waitTicks--; return; }
@@ -149,7 +158,8 @@ public final class SchematicBuilderClient implements ClientModInitializer {
         int examined = 0;
         while (index < blocks.size() && examined++ < MAX_SKIP_PER_TICK) {
             SchematicData.BlockEntry entry = blocks.get(index);
-            if (layerMode && entry.y() != selectedLayer) { index++; continue; }\n            BlockPos target = origin.add(rotatedX(entry), entry.y(), rotatedZ(entry));
+            if (layerMode && entry.y() != selectedLayer) { index++; continue; }
+            BlockPos target = origin.add(rotatedX(entry), entry.y(), rotatedZ(entry));
             Block block = Registries.BLOCK.get(Identifier.of(entry.blockId()));
             BlockState desired = block.getDefaultState();
 
@@ -203,7 +213,25 @@ public final class SchematicBuilderClient implements ClientModInitializer {
         }
     }
 
-    private static int rotatedX(SchematicData.BlockEntry entry) {\n        return switch (rotation) {\n            case 1 -> schematic.length() - 1 - entry.z();\n            case 2 -> schematic.width() - 1 - entry.x();\n            case 3 -> entry.z();\n            default -> entry.x();\n        };\n    }\n\n    private static int rotatedZ(SchematicData.BlockEntry entry) {\n        return switch (rotation) {\n            case 1 -> entry.x();\n            case 2 -> schematic.length() - 1 - entry.z();\n            case 3 -> schematic.width() - 1 - entry.x();\n            default -> entry.z();\n        };\n    }\n\n    private static void showMaterialPreview(MinecraftClient client) {
+    private static int rotatedX(SchematicData.BlockEntry entry) {
+        return switch (rotation) {
+            case 1 -> schematic.length() - 1 - entry.z();
+            case 2 -> schematic.width() - 1 - entry.x();
+            case 3 -> entry.z();
+            default -> entry.x();
+        };
+    }
+
+    private static int rotatedZ(SchematicData.BlockEntry entry) {
+        return switch (rotation) {
+            case 1 -> entry.x();
+            case 2 -> schematic.length() - 1 - entry.z();
+            case 3 -> schematic.width() - 1 - entry.x();
+            default -> entry.z();
+        };
+    }
+
+    private static void showMaterialPreview(MinecraftClient client) {
         Map<String, Integer> required = new HashMap<>();
         for (SchematicData.BlockEntry entry : schematic.blocks()) required.merge(entry.blockId(), 1, Integer::sum);
         List<String> missing = new ArrayList<>();
