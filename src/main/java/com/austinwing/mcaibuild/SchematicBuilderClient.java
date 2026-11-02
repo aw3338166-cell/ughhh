@@ -2,6 +2,13 @@ package com.austinwing.mcaibuild;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
+import net.minecraft.client.render.RenderLayers;
+import net.minecraft.client.render.VertexConsumer;
+import net.minecraft.client.render.VertexRendering;
+import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.util.shape.VoxelShapes;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.Block;
@@ -60,6 +67,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
         layerUpKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.layer_up", GLFW.GLFW_KEY_PAGE_UP, category));
         layerDownKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.layer_down", GLFW.GLFW_KEY_PAGE_DOWN, category));
         ClientTickEvents.END_CLIENT_TICK.register(SchematicBuilderClient::tick);
+        WorldRenderEvents.AFTER_ENTITIES.register(SchematicBuilderClient::renderBlueprint);
         try {
             Files.createDirectories(SCHEMATIC_DIR);
         } catch (IOException e) {
@@ -122,6 +130,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
                 return;
             }
             schematic = SchematicReader.read(newest);
+            origin = client.player.getBlockPos().offset(client.player.getHorizontalFacing(), 3);
             index = placed = skipped = 0;
             running = paused = false;
             clearRecovery();
@@ -144,8 +153,10 @@ public final class SchematicBuilderClient implements ClientModInitializer {
             tell(client, "Builder cannot run in spectator mode.");
             return;
         }
-        origin = client.player.getBlockPos().offset(client.player.getHorizontalFacing(), 3);
-        if (!restoreRecovery(client)) index = placed = skipped = 0;
+        if (!restoreRecovery(client)) {
+            if (origin == null) origin = client.player.getBlockPos().offset(client.player.getHorizontalFacing(), 3);
+            index = placed = skipped = 0;
+        }
         waitTicks = 0;
         paused = false;
         running = true;
@@ -229,6 +240,43 @@ public final class SchematicBuilderClient implements ClientModInitializer {
             case 3 -> schematic.width() - 1 - entry.x();
             default -> entry.z();
         };
+    }
+
+    private static void renderBlueprint(WorldRenderContext context) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (schematic == null || origin == null || client.world == null || context.matrices() == null || context.consumers() == null) return;
+
+        // Draw a lightweight wireframe blueprint for blocks that are not already in place.
+        // Cap the number of outlines to keep large schematics from overwhelming frame time.
+        MatrixStack matrices = context.matrices();
+        Vec3d camera = client.gameRenderer.getCamera().getCameraPos();
+        VertexConsumer lines = context.consumers().getBuffer(RenderLayers.lines());
+        int rendered = 0;
+        matrices.push();
+        try {
+            for (SchematicData.BlockEntry entry : schematic.blocks()) {
+                if (rendered >= 2500) break;
+                if (layerMode && entry.y() != selectedLayer) continue;
+
+                Block block = Registries.BLOCK.get(Identifier.of(entry.blockId()));
+                if (block == net.minecraft.block.Blocks.AIR) continue;
+
+                BlockPos target = origin.add(rotatedX(entry), entry.y(), rotatedZ(entry));
+                if (client.world.getBlockState(target).isOf(block)) continue;
+
+                BlockState state = block.getDefaultState();
+                var shape = state.getOutlineShape(client.world, target);
+                if (shape.isEmpty()) continue;
+
+                double x = target.getX() - camera.x;
+                double y = target.getY() - camera.y;
+                double z = target.getZ() - camera.z;
+                VertexRendering.drawOutline(matrices, lines, shape, x, y, z, 0xFF35D9FF, 1.5F);
+                rendered++;
+            }
+        } finally {
+            matrices.pop();
+        }
     }
 
     private static void showMaterialPreview(MinecraftClient client) {
