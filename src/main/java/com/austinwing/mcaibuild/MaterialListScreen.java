@@ -114,13 +114,13 @@ public final class MaterialListScreen extends Screen {
 
     private void copyMissingList() {
         if (client == null || client.keyboard == null) return;
-        StringBuilder text = new StringBuilder("Minecraft AI Build - Missing hotbar materials\\n");
+        StringBuilder text = new StringBuilder("Minecraft AI Build - Missing hotbar materials\n");
         boolean any = false;
         for (MaterialRow row : rows) {
             int missing = Math.max(0, row.required() - row.hotbarAvailable());
             if (missing > 0) {
                 text.append(row.name()).append(" x").append(missing)
-                        .append(" (inventory total: ").append(row.inventoryAvailable()).append(")\\n");
+                        .append(" (inventory total: ").append(row.inventoryAvailable()).append(")\n");
                 any = true;
             }
         }
@@ -174,11 +174,11 @@ public final class MaterialListScreen extends Screen {
             MaterialRow row = filtered.get(i);
             int y = listTop + (i - scroll) * 23;
             boolean ready = row.hotbarAvailable() >= row.required();
-            Item item = Registries.ITEM.get(Identifier.of(row.id()));
+            Item item = Registries.BLOCK.get(Identifier.of(row.id())).asItem();
             if (item != null) context.drawItem(new ItemStack(item), left + 18, y + 1);
             context.drawTextWithShadow(textRenderer, row.name(), left + 42, y + 6, 0xFFFFFFFF);
-            String amount = "Hotbar " + row.hotbarAvailable() + " | Bag " + row.inventoryAvailable()
-                    + " | Need " + row.required();
+            String amount = "H:" + row.hotbarAvailable() + "  Inv:" + row.inventoryAvailable()
+                    + "  Req:" + row.required();
             int amountWidth = textRenderer.getWidth(amount);
             context.drawTextWithShadow(textRenderer, amount,
                     left + panelWidth - 22 - amountWidth, y + 6,
