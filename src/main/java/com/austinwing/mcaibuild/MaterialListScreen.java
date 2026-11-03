@@ -58,9 +58,9 @@ public final class MaterialListScreen extends Screen {
                     missingOnly = !missingOnly;
                     button.setMessage(Text.literal(missingOnly ? "Show all" : "Missing only"));
                     scroll = 0;
-                }).dimensions(left + 14, top + panelHeight - 28, 92, 20).build());
+                }).dimensions(left + 14, top + panelHeight - 28, 78, 20).build());
         addDrawableChild(ButtonWidget.builder(Text.literal("Copy missing"), button -> copyMissingList())
-                .dimensions(left + 112, top + panelHeight - 28, 100, 20).build());
+                .dimensions(left + 96, top + panelHeight - 28, 90, 20).build());
         addDrawableChild(ButtonWidget.builder(Text.literal("Select chest"), button -> {
                     if (SchematicBuilderClient.selectLookedAtContainer()) {
                         button.setMessage(Text.literal("Chest selected"));
@@ -68,15 +68,15 @@ public final class MaterialListScreen extends Screen {
                     } else if (client != null && client.player != null) {
                         client.player.sendMessage(Text.literal("[AI Build] Look directly at a chest or shulker box within 6 blocks, then select it."), false);
                     }
-                }).dimensions(left + 218, top + panelHeight - 28, 92, 20).build());
+                }).dimensions(left + 190, top + panelHeight - 28, 90, 20).build());
         addDrawableChild(ButtonWidget.builder(Text.literal("Refresh"), button -> refreshRows())
-                .dimensions(left + 314, top + panelHeight - 28, 70, 20).build());
+                .dimensions(left + 284, top + panelHeight - 28, 64, 20).build());
         addDrawableChild(ButtonWidget.builder(Text.literal("Clear box"), button -> {
                     SchematicBuilderClient.clearSelectedContainer();
                     refreshRows();
-                }).dimensions(left + 388, top + panelHeight - 28, 70, 20).build());
+                }).dimensions(left + 352, top + panelHeight - 28, 64, 20).build());
         addDrawableChild(ButtonWidget.builder(Text.literal("Close"), button -> close())
-                .dimensions(left + panelWidth - 0, top + panelHeight - 28, 1, 20).build());
+                .dimensions(left + 422, top + panelHeight - 28, 64, 20).build());
 
         // Screen.client is assigned by Minecraft before init(); populate inventory now,
         // not in the constructor where client/player may still be null.
