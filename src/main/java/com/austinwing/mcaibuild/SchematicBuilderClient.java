@@ -14,6 +14,7 @@ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
+import net.minecraft.state.property.Property;
 import net.minecraft.block.entity.ChestBlockEntity;
 import net.minecraft.block.entity.ShulkerBoxBlockEntity;
 import net.minecraft.component.DataComponentTypes;
@@ -179,7 +180,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
             if (layerMode && entry.y() != selectedLayer) { index++; continue; }
             BlockPos target = origin.add(rotatedX(entry), entry.y(), rotatedZ(entry));
             Block block = Registries.BLOCK.get(Identifier.of(entry.blockId()));
-            BlockState desired = block.getDefaultState();
+            BlockState desired = schematicState(block, entry);
 
             if (block == net.minecraft.block.Blocks.AIR) {
                 index++;
@@ -231,6 +232,47 @@ public final class SchematicBuilderClient implements ClientModInitializer {
         }
     }
 
+    private static BlockState schematicState(Block block, SchematicData.BlockEntry entry) {
+        BlockState state = block.getDefaultState();
+        for (Map.Entry<String, String> item : entry.properties().entrySet()) {
+            Property<?> property = state.getBlock().getStateManager().getProperty(item.getKey());
+            if (property != null) state = applyProperty(state, property, rotateProperty(item.getKey(), item.getValue()));
+        }
+        return state;
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static BlockState applyProperty(BlockState state, Property property, String value) {
+        var parsed = property.parse(value);
+        return parsed.isPresent() ? state.with(property, (Comparable) parsed.get()) : state;
+    }
+
+    private static String rotateProperty(String key, String value) {
+        if (rotation == 0) return value;
+        if (key.equals("facing")) {
+            try {
+                Direction direction = Direction.valueOf(value.toUpperCase(java.util.Locale.ROOT));
+                for (int i = 0; i < rotation; i++) direction = direction.rotateYClockwise();
+                return direction.getName();
+            } catch (IllegalArgumentException ignored) { return value; }
+        }
+        if (key.equals("axis") && rotation % 2 == 1) {
+            if (value.equals("x")) return "z";
+            if (value.equals("z")) return "x";
+        }
+        if (key.equals("shape") && rotation % 2 == 1) {
+            if (value.equals("inner_left")) return "inner_right";
+            if (value.equals("inner_right")) return "inner_left";
+            if (value.equals("outer_left")) return "outer_right";
+            if (value.equals("outer_right")) return "outer_left";
+        }
+        if (key.equals("rotation")) {
+            try { return Integer.toString((Integer.parseInt(value) + rotation * 4) % 16); }
+            catch (NumberFormatException ignored) { return value; }
+        }
+        return value;
+    }
+
     private static int rotatedX(SchematicData.BlockEntry entry) {
         return switch (rotation) {
             case 1 -> schematic.length() - 1 - entry.z();
@@ -273,7 +315,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
                 BlockState existing = client.world.getBlockState(target);
                 if (existing.isOf(block)) continue;
 
-                BlockState state = block.getDefaultState();
+                BlockState state = schematicState(block, entry);
                 double x = target.getX() - camera.x;
                 double y = target.getY() - camera.y;
                 double z = target.getZ() - camera.z;
