@@ -4,6 +4,7 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
+import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.render.RenderLayers;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexRendering;
@@ -244,10 +245,11 @@ public final class SchematicBuilderClient implements ClientModInitializer {
 
     private static void renderBlueprint(WorldRenderContext context) {
         MinecraftClient client = MinecraftClient.getInstance();
-        if (schematic == null || origin == null || client.world == null || context.matrices() == null || context.consumers() == null) return;
+        if (schematic == null || origin == null || client.world == null
+                || context.matrices() == null || context.consumers() == null) return;
 
-        // Draw a lightweight wireframe blueprint for blocks that are not already in place.
-        // Cap the number of outlines to keep large schematics from overwhelming frame time.
+        // Render the actual block models as a client-only blueprint. Nothing is placed
+        // in the world by this renderer; the normal builder still handles placement.
         MatrixStack matrices = context.matrices();
         Vec3d camera = client.gameRenderer.getCamera().getCameraPos();
         VertexConsumer lines = context.consumers().getBuffer(RenderLayers.lines());
@@ -262,16 +264,29 @@ public final class SchematicBuilderClient implements ClientModInitializer {
                 if (block == net.minecraft.block.Blocks.AIR) continue;
 
                 BlockPos target = origin.add(rotatedX(entry), entry.y(), rotatedZ(entry));
-                if (client.world.getBlockState(target).isOf(block)) continue;
+                BlockState existing = client.world.getBlockState(target);
+                if (existing.isOf(block)) continue;
 
                 BlockState state = block.getDefaultState();
-                var shape = state.getOutlineShape(client.world, target);
-                if (shape.isEmpty()) continue;
-
                 double x = target.getX() - camera.x;
                 double y = target.getY() - camera.y;
                 double z = target.getZ() - camera.z;
-                VertexRendering.drawOutline(matrices, lines, shape, x, y, z, 0xFF35D9FF, 1.5F);
+
+                // Full-bright textured model makes the planned block easy to identify.
+                // The cyan outline remains visible around the preview model.
+                matrices.push();
+                try {
+                    matrices.translate(x, y, z);
+                    client.getBlockRenderManager().renderBlockAsEntity(
+                            state, matrices, context.consumers(), 15728880, OverlayTexture.DEFAULT_UV);
+                } finally {
+                    matrices.pop();
+                }
+
+                var shape = state.getOutlineShape(client.world, target);
+                if (!shape.isEmpty()) {
+                    VertexRendering.drawOutline(matrices, lines, shape, x, y, z, 0xFF35D9FF, 1.5F);
+                }
                 rendered++;
             }
         } finally {
