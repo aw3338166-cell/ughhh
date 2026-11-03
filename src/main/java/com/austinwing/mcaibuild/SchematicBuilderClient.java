@@ -14,6 +14,11 @@ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.entity.ChestBlockEntity;
+import net.minecraft.block.entity.ShulkerBoxBlockEntity;
+import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.type.ContainerComponent;
+import net.minecraft.inventory.Inventory;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.item.ItemStack;
@@ -51,6 +56,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
     private static int index, delayTicks = 6, waitTicks, placed, skipped;
     private static boolean running, paused, layerMode;
     private static int rotation, selectedLayer;
+    private static BlockPos selectedContainerPos;
 
     @Override
     public void onInitializeClient() {
@@ -334,6 +340,53 @@ public final class SchematicBuilderClient implements ClientModInitializer {
         return null;
     }
 
+
+    public static boolean selectLookedAtContainer() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.player == null || client.world == null
+                || !(client.crosshairTarget instanceof BlockHitResult hit)) return false;
+        BlockPos pos = hit.getBlockPos();
+        if (client.player.squaredDistanceTo(Vec3d.ofCenter(pos)) > 36.0) return false;
+        var blockEntity = client.world.getBlockEntity(pos);
+        if (!(blockEntity instanceof ChestBlockEntity) && !(blockEntity instanceof ShulkerBoxBlockEntity)) return false;
+        if (!(blockEntity instanceof Inventory)) return false;
+        selectedContainerPos = pos.toImmutable();
+        return true;
+    }
+
+    public static void clearSelectedContainer() {
+        selectedContainerPos = null;
+    }
+
+    public static String selectedContainerLabel() {
+        if (selectedContainerPos == null) return "No chest selected";
+        return "Selected container: " + selectedContainerPos.toShortString();
+    }
+
+    public static Map<String, Integer> getSelectedContainerMaterialCounts() {
+        Map<String, Integer> counts = new HashMap<>();
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (selectedContainerPos == null || client.world == null
+                || !client.world.isChunkLoaded(selectedContainerPos)) return counts;
+        var blockEntity = client.world.getBlockEntity(selectedContainerPos);
+        if (!(blockEntity instanceof Inventory inventory)) return counts;
+        for (int slot = 0; slot < inventory.size(); slot++) {
+            addStackAndShulkerContents(inventory.getStack(slot), counts, 0);
+        }
+        return counts;
+    }
+
+    private static void addStackAndShulkerContents(ItemStack stack, Map<String, Integer> counts, int depth) {
+        if (stack == null || stack.isEmpty() || depth > 4) return;
+        String itemId = Registries.ITEM.getId(stack.getItem()).toString();
+        counts.merge(itemId, stack.getCount(), Integer::sum);
+        ContainerComponent contents = stack.get(DataComponentTypes.CONTAINER);
+        if (contents != null && depth < 4) {
+            for (ItemStack nested : contents.iterateNonEmpty()) {
+                addStackAndShulkerContents(nested, counts, depth + 1);
+            }
+        }
+    }
 
     public static void dashboardStart() {
         MinecraftClient client = MinecraftClient.getInstance();
