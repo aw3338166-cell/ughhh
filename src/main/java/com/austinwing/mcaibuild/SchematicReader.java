@@ -66,7 +66,8 @@ public final class SchematicReader {
             int x = i % width;
             int z = (i / width) % length;
             int y = i / (width * length);
-            blocks.add(new SchematicData.BlockEntry(x, y, z, id));
+            ParsedBlockState parsedState = parseBlockState(id);
+            blocks.add(new SchematicData.BlockEntry(x, y, z, parsedState.id(), parsedState.properties()));
         }
         return new SchematicData(path.getFileName().toString(), width, height, length, List.copyOf(blocks));
     }
@@ -76,7 +77,7 @@ public final class SchematicReader {
         if (!(regionsObject instanceof Map<?, ?> regions) || regions.isEmpty())
             throw new IOException("The Litematica file contains no regions.");
 
-        record Raw(int x, int y, int z, String id) {}
+        record Raw(int x, int y, int z, String id, Map<String, String> properties) {}
         List<Raw> raw = new ArrayList<>();
         int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
         int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
@@ -95,9 +96,18 @@ public final class SchematicReader {
             if (palette.isEmpty()) continue;
 
             List<String> paletteIds = new ArrayList<>();
+            List<Map<String, String>> paletteProperties = new ArrayList<>();
             for (Object p : palette) {
-                if (p instanceof Map<?, ?> state && state.get("Name") instanceof String name) paletteIds.add(name);
-                else paletteIds.add("minecraft:air");
+                if (p instanceof Map<?, ?> state && state.get("Name") instanceof String name) {
+                    paletteIds.add(name);
+                    Map<String, String> props = new HashMap<>();
+                    if (state.get("Properties") instanceof Map<?, ?> rawProps) {
+                        for (Map.Entry<?, ?> prop : rawProps.entrySet()) {
+                            if (prop.getKey() instanceof String key && prop.getValue() != null) props.put(key, String.valueOf(prop.getValue()));
+                        }
+                    }
+                    paletteProperties.add(Map.copyOf(props));
+                } else { paletteIds.add("minecraft:air"); paletteProperties.add(Map.of()); }
             }
             int bits = Math.max(2, 32 - Integer.numberOfLeadingZeros(paletteIds.size() - 1));
             int volume = ax * ay * az;
@@ -114,7 +124,7 @@ public final class SchematicReader {
                 int wx = px + (sx < 0 ? -x : x);
                 int wy = py + (sy < 0 ? -y : y);
                 int wz = pz + (sz < 0 ? -z : z);
-                raw.add(new Raw(wx, wy, wz, id));
+                raw.add(new Raw(wx, wy, wz, id, paletteProperties.get(paletteIndex)));
                 minX = Math.min(minX, wx); minY = Math.min(minY, wy); minZ = Math.min(minZ, wz);
                 maxX = Math.max(maxX, wx); maxY = Math.max(maxY, wy); maxZ = Math.max(maxZ, wz);
                 if (raw.size() > MAX_BLOCKS) throw new IOException("Schematic is too large (limit: " + MAX_BLOCKS + " blocks).");
@@ -123,7 +133,7 @@ public final class SchematicReader {
         if (raw.isEmpty()) throw new IOException("No placeable blocks were found in the Litematica file.");
         int width = maxX - minX + 1, height = maxY - minY + 1, length = maxZ - minZ + 1;
         List<SchematicData.BlockEntry> blocks = new ArrayList<>(raw.size());
-        for (Raw b : raw) blocks.add(new SchematicData.BlockEntry(b.x-minX, b.y-minY, b.z-minZ, b.id));
+        for (Raw b : raw) blocks.add(new SchematicData.BlockEntry(b.x-minX, b.y-minY, b.z-minZ, b.id, b.properties));
         blocks.sort(Comparator.comparingInt(SchematicData.BlockEntry::y)
                 .thenComparingInt(SchematicData.BlockEntry::z).thenComparingInt(SchematicData.BlockEntry::x));
         return new SchematicData(path.getFileName().toString(), width, height, length, List.copyOf(blocks));
@@ -149,6 +159,20 @@ public final class SchematicReader {
             shift += 7;
         }
         throw new IOException("Invalid or truncated Sponge BlockData varint stream.");
+    }
+
+    private record ParsedBlockState(String id, Map<String, String> properties) {}
+
+    private static ParsedBlockState parseBlockState(String state) {
+        int open = state.indexOf('[');
+        if (open < 0 || !state.endsWith("]")) return new ParsedBlockState(state, Map.of());
+        String id = state.substring(0, open);
+        Map<String, String> properties = new HashMap<>();
+        for (String part : state.substring(open + 1, state.length() - 1).split(",")) {
+            int equals = part.indexOf('=');
+            if (equals > 0) properties.put(part.substring(0, equals), part.substring(equals + 1));
+        }
+        return new ParsedBlockState(id, Map.copyOf(properties));
     }
 
     private static boolean isAir(String id) {
