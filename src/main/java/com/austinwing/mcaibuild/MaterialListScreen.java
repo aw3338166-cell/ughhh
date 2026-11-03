@@ -23,9 +23,10 @@ public final class MaterialListScreen extends Screen {
     private String search = "";
     private int scroll;
     private int left, top, panelWidth, panelHeight;
-    private int totalRequired, totalAvailable;
+    private int totalRequired, totalHotbarAvailable, totalInventoryAvailable;
+    private boolean missingOnly;
 
-    private record MaterialRow(String id, String name, int required, int available) {}
+    private record MaterialRow(String id, String name, int required, int hotbarAvailable, int inventoryAvailable) {}
 
     public MaterialListScreen(SchematicData schematic) {
         super(Text.literal("Build Materials"));
@@ -51,10 +52,17 @@ public final class MaterialListScreen extends Screen {
         });
         addDrawableChild(searchField);
 
+        addDrawableChild(ButtonWidget.builder(Text.literal(missingOnly ? "Show all" : "Missing only"), button -> {
+                    missingOnly = !missingOnly;
+                    button.setMessage(Text.literal(missingOnly ? "Show all" : "Missing only"));
+                    scroll = 0;
+                }).dimensions(left + 14, top + panelHeight - 28, 92, 20).build());
+        addDrawableChild(ButtonWidget.builder(Text.literal("Copy missing"), button -> copyMissingList())
+                .dimensions(left + 112, top + panelHeight - 28, 100, 20).build());
         addDrawableChild(ButtonWidget.builder(Text.literal("Refresh"), button -> refreshRows())
-                .dimensions(left + 14, top + panelHeight - 28, 90, 20).build());
+                .dimensions(left + 218, top + panelHeight - 28, 76, 20).build());
         addDrawableChild(ButtonWidget.builder(Text.literal("Close"), button -> close())
-                .dimensions(left + panelWidth - 104, top + panelHeight - 28, 90, 20).build());
+                .dimensions(left + panelWidth - 90, top + panelHeight - 28, 76, 20).build());
 
         // Screen.client is assigned by Minecraft before init(); populate inventory now,
         // not in the constructor where client/player may still be null.
@@ -64,7 +72,8 @@ public final class MaterialListScreen extends Screen {
     private void refreshRows() {
         rows.clear();
         totalRequired = 0;
-        totalAvailable = 0;
+        totalHotbarAvailable = 0;
+        totalInventoryAvailable = 0;
         if (client == null || client.player == null) return;
 
         Map<String, Integer> required = new HashMap<>();
@@ -73,35 +82,59 @@ public final class MaterialListScreen extends Screen {
         }
 
         for (Map.Entry<String, Integer> entry : required.entrySet()) {
-            int available = countInventory(entry.getKey());
-            Item item = Registries.ITEM.get(Identifier.of(entry.getKey()));
-            String name = item == null ? entry.getKey() : new ItemStack(item).getName().getString();
-            rows.add(new MaterialRow(entry.getKey(), name, entry.getValue(), available));
+            Item item = Registries.BLOCK.get(Identifier.of(entry.getKey())).asItem();
+            String itemId = Registries.ITEM.getId(item).toString();
+            int hotbar = countInventory(itemId, true);
+            int inventory = countInventory(itemId, false);
+            String name = new ItemStack(item).getName().getString();
+            rows.add(new MaterialRow(entry.getKey(), name, entry.getValue(), hotbar, inventory));
             totalRequired += entry.getValue();
-            totalAvailable += Math.min(entry.getValue(), available);
+            totalHotbarAvailable += Math.min(entry.getValue(), hotbar);
+            totalInventoryAvailable += Math.min(entry.getValue(), inventory);
         }
         rows.sort(Comparator.comparingInt((MaterialRow row) ->
-                row.available() >= row.required() ? 1 : 0)
+                row.hotbarAvailable() >= row.required() ? 1 : 0)
                 .thenComparing(MaterialRow::name, String.CASE_INSENSITIVE_ORDER));
         scroll = Math.min(scroll, Math.max(0, filteredRows().size() - visibleRows()));
     }
 
-    private int countInventory(String id) {
+    private int countInventory(String id, boolean hotbarOnly) {
         int count = 0;
-        for (int slot = 0; slot < 36; slot++) {
+        int end = hotbarOnly ? 9 : 36;
+        for (int slot = 0; slot < end; slot++) {
             ItemStack stack = client.player.getInventory().getStack(slot);
-            if (!stack.isEmpty() && Registries.ITEM.getId(stack.getItem()).toString().equals(id)) {
-                count += stack.getCount();
-            }
+            if (!stack.isEmpty() && Registries.ITEM.getId(stack.getItem()).toString().equals(id)) count += stack.getCount();
+        }
+        if (!hotbarOnly) {
+            ItemStack offhand = client.player.getOffHandStack();
+            if (!offhand.isEmpty() && Registries.ITEM.getId(offhand.getItem()).toString().equals(id)) count += offhand.getCount();
         }
         return count;
     }
 
+    private void copyMissingList() {
+        if (client == null || client.keyboard == null) return;
+        StringBuilder text = new StringBuilder("Minecraft AI Build - Missing hotbar materials\\n");
+        boolean any = false;
+        for (MaterialRow row : rows) {
+            int missing = Math.max(0, row.required() - row.hotbarAvailable());
+            if (missing > 0) {
+                text.append(row.name()).append(" x").append(missing)
+                        .append(" (inventory total: ").append(row.inventoryAvailable()).append(")\\n");
+                any = true;
+            }
+        }
+        if (!any) text.append("No missing hotbar materials.");
+        client.keyboard.setClipboard(text.toString());
+        if (client.player != null) client.player.sendMessage(Text.literal("[AI Build] Missing-material list copied."), false);
+    }
     private List<MaterialRow> filteredRows() {
-        if (search.isBlank()) return rows;
         String query = search.toLowerCase();
-        return rows.stream().filter(row -> row.name().toLowerCase().contains(query)
-                || row.id().toLowerCase().contains(query)).toList();
+        return rows.stream()
+                .filter(row -> !missingOnly || row.hotbarAvailable() < row.required())
+                .filter(row -> query.isBlank() || row.name().toLowerCase().contains(query)
+                        || row.id().toLowerCase().contains(query))
+                .toList();
     }
 
     private int visibleRows() {
@@ -122,12 +155,13 @@ public final class MaterialListScreen extends Screen {
         context.drawCenteredTextWithShadow(textRenderer, "BUILD MATERIALS", width / 2, top + 12, 0xFFFFFFFF);
         context.drawTextWithShadow(textRenderer, schematic.name(), left + 14, top + 34, 0xFFB8C7D9);
 
-        int percent = totalRequired == 0 ? 100 : (int) (totalAvailable * 100L / totalRequired);
+        int percent = totalRequired == 0 ? 100 : (int) (totalHotbarAvailable * 100L / totalRequired);
         context.fill(left + 14, top + 75, left + panelWidth - 14, top + 82, 0xFF343B45);
         int barWidth = (panelWidth - 28) * percent / 100;
         if (barWidth > 0) context.fill(left + 14, top + 75, left + 14 + barWidth, top + 82, 0xFF55C98A);
         context.drawTextWithShadow(textRenderer,
-                "Collected: " + totalAvailable + " / " + totalRequired + " blocks (" + percent + "%)",
+                "Hotbar ready: " + totalHotbarAvailable + " / " + totalRequired
+                        + " | Inventory total: " + totalInventoryAvailable + " (" + percent + "% hotbar)",
                 left + 14, top + 87, 0xFFE3EAF2);
 
         int listTop = top + 112;
@@ -139,12 +173,12 @@ public final class MaterialListScreen extends Screen {
         for (int i = scroll; i < Math.min(filtered.size(), scroll + visibleRows()); i++) {
             MaterialRow row = filtered.get(i);
             int y = listTop + (i - scroll) * 23;
-            boolean ready = row.available() >= row.required();
+            boolean ready = row.hotbarAvailable() >= row.required();
             Item item = Registries.ITEM.get(Identifier.of(row.id()));
             if (item != null) context.drawItem(new ItemStack(item), left + 18, y + 1);
             context.drawTextWithShadow(textRenderer, row.name(), left + 42, y + 6, 0xFFFFFFFF);
-            String amount = Math.min(row.available(), row.required()) + " / " + row.required()
-                    + (ready ? "  READY" : "  NEED " + (row.required() - row.available()));
+            String amount = "Hotbar " + row.hotbarAvailable() + " | Bag " + row.inventoryAvailable()
+                    + " | Need " + row.required();
             int amountWidth = textRenderer.getWidth(amount);
             context.drawTextWithShadow(textRenderer, amount,
                     left + panelWidth - 22 - amountWidth, y + 6,
@@ -153,7 +187,8 @@ public final class MaterialListScreen extends Screen {
         context.disableScissor();
 
         if (filtered.isEmpty()) {
-            context.drawCenteredTextWithShadow(textRenderer, "No matching materials.",
+            context.drawCenteredTextWithShadow(textRenderer, missingOnly
+                    ? "No missing hotbar materials." : "No matching materials.",
                     width / 2, listTop + 12, 0xFFB8C7D9);
         } else if (filtered.size() > visibleRows()) {
             context.drawTextWithShadow(textRenderer, "Scroll to see all " + filtered.size() + " materials",
