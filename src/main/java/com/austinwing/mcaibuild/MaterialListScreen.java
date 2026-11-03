@@ -6,6 +6,7 @@ import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.registry.Registries;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
@@ -24,9 +25,10 @@ public final class MaterialListScreen extends Screen {
     private int scroll;
     private int left, top, panelWidth, panelHeight;
     private int totalRequired, totalHotbarAvailable, totalInventoryAvailable;
+    private int totalStoredAvailable;
     private boolean missingOnly;
 
-    private record MaterialRow(String id, String name, int required, int hotbarAvailable, int inventoryAvailable) {}
+    private record MaterialRow(String id, String name, int required, int hotbarAvailable, int inventoryAvailable, int storedAvailable) {}
 
     public MaterialListScreen(SchematicData schematic) {
         super(Text.literal("Build Materials"));
@@ -59,10 +61,22 @@ public final class MaterialListScreen extends Screen {
                 }).dimensions(left + 14, top + panelHeight - 28, 92, 20).build());
         addDrawableChild(ButtonWidget.builder(Text.literal("Copy missing"), button -> copyMissingList())
                 .dimensions(left + 112, top + panelHeight - 28, 100, 20).build());
+        addDrawableChild(ButtonWidget.builder(Text.literal("Select chest"), button -> {
+                    if (SchematicBuilderClient.selectLookedAtContainer()) {
+                        button.setMessage(Text.literal("Chest selected"));
+                        refreshRows();
+                    } else if (client != null && client.player != null) {
+                        client.player.sendMessage(Text.literal("[AI Build] Look directly at a chest or shulker box within 6 blocks, then select it."), false);
+                    }
+                }).dimensions(left + 218, top + panelHeight - 28, 92, 20).build());
         addDrawableChild(ButtonWidget.builder(Text.literal("Refresh"), button -> refreshRows())
-                .dimensions(left + 218, top + panelHeight - 28, 76, 20).build());
+                .dimensions(left + 314, top + panelHeight - 28, 70, 20).build());
+        addDrawableChild(ButtonWidget.builder(Text.literal("Clear box"), button -> {
+                    SchematicBuilderClient.clearSelectedContainer();
+                    refreshRows();
+                }).dimensions(left + 388, top + panelHeight - 28, 70, 20).build());
         addDrawableChild(ButtonWidget.builder(Text.literal("Close"), button -> close())
-                .dimensions(left + panelWidth - 90, top + panelHeight - 28, 76, 20).build());
+                .dimensions(left + panelWidth - 0, top + panelHeight - 28, 1, 20).build());
 
         // Screen.client is assigned by Minecraft before init(); populate inventory now,
         // not in the constructor where client/player may still be null.
@@ -74,8 +88,10 @@ public final class MaterialListScreen extends Screen {
         totalRequired = 0;
         totalHotbarAvailable = 0;
         totalInventoryAvailable = 0;
+        totalStoredAvailable = 0;
         if (client == null || client.player == null) return;
 
+        Map<String, Integer> storedCounts = SchematicBuilderClient.getSelectedContainerMaterialCounts();
         Map<String, Integer> required = new HashMap<>();
         for (SchematicData.BlockEntry entry : schematic.blocks()) {
             required.merge(entry.blockId(), 1, Integer::sum);
@@ -86,11 +102,13 @@ public final class MaterialListScreen extends Screen {
             String itemId = Registries.ITEM.getId(item).toString();
             int hotbar = countInventory(itemId, true);
             int inventory = countInventory(itemId, false);
+            int stored = storedCounts.getOrDefault(itemId, 0);
             String name = new ItemStack(item).getName().getString();
-            rows.add(new MaterialRow(entry.getKey(), name, entry.getValue(), hotbar, inventory));
+            rows.add(new MaterialRow(entry.getKey(), name, entry.getValue(), hotbar, inventory, stored));
             totalRequired += entry.getValue();
             totalHotbarAvailable += Math.min(entry.getValue(), hotbar);
-            totalInventoryAvailable += Math.min(entry.getValue(), inventory);
+            totalInventoryAvailable += Math.min(entry.getValue(), inventory + stored);
+            totalStoredAvailable += Math.min(entry.getValue(), stored);
         }
         rows.sort(Comparator.comparingInt((MaterialRow row) ->
                 row.hotbarAvailable() >= row.required() ? 1 : 0)
@@ -138,7 +156,7 @@ public final class MaterialListScreen extends Screen {
     }
 
     private int visibleRows() {
-        return Math.max(1, (panelHeight - 112) / 23);
+        return Math.max(1, (panelHeight - 126) / 23);
     }
 
     @Override
@@ -163,8 +181,11 @@ public final class MaterialListScreen extends Screen {
                 "Hotbar ready: " + totalHotbarAvailable + " / " + totalRequired
                         + " | Inventory total: " + totalInventoryAvailable + " (" + percent + "% hotbar)",
                 left + 14, top + 87, 0xFFE3EAF2);
+        context.drawTextWithShadow(textRenderer, SchematicBuilderClient.selectedContainerLabel()
+                + " | Stored materials counted: " + totalStoredAvailable,
+                left + 14, top + 102, 0xFF9FD5FF);
 
-        int listTop = top + 112;
+        int listTop = top + 126;
         int listBottom = top + panelHeight - 38;
         context.fill(left + 10, listTop - 5, left + panelWidth - 10, listBottom, 0x88252D38);
         context.enableScissor(left + 10, listTop, left + panelWidth - 10, listBottom);
@@ -177,8 +198,8 @@ public final class MaterialListScreen extends Screen {
             Item item = Registries.BLOCK.get(Identifier.of(row.id())).asItem();
             if (item != null) context.drawItem(new ItemStack(item), left + 18, y + 1);
             context.drawTextWithShadow(textRenderer, row.name(), left + 42, y + 6, 0xFFFFFFFF);
-            String amount = "H:" + row.hotbarAvailable() + "  Inv:" + row.inventoryAvailable()
-                    + "  Req:" + row.required();
+            String amount = "H:" + row.hotbarAvailable() + " Inv:" + row.inventoryAvailable()
+                    + " Box:" + row.storedAvailable() + " Req:" + row.required();
             int amountWidth = textRenderer.getWidth(amount);
             context.drawTextWithShadow(textRenderer, amount,
                     left + panelWidth - 22 - amountWidth, y + 6,
@@ -199,7 +220,7 @@ public final class MaterialListScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-        int listTop = top + 112;
+        int listTop = top + 126;
         int listBottom = top + panelHeight - 38;
         if (mouseX >= left && mouseX <= left + panelWidth && mouseY >= listTop && mouseY <= listBottom) {
             int max = Math.max(0, filteredRows().size() - visibleRows());
