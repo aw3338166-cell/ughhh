@@ -209,7 +209,16 @@ public final class SchematicBuilderClient implements ClientModInitializer {
             }
 
             client.player.getInventory().setSelectedSlot(slot);
+            float previousYaw = client.player.getYaw();
+            String desiredFacing = entry.properties().get("facing");
+            if (desiredFacing != null) {
+                try {
+                    Direction facing = Direction.valueOf(rotateProperty("facing", desiredFacing).toUpperCase(java.util.Locale.ROOT));
+                    if (facing.getAxis().isHorizontal()) client.player.setYaw(facing.getOpposite().asRotation());
+                } catch (IllegalArgumentException ignored) { }
+            }
             ActionResult result = client.interactionManager.interactBlock(client.player, Hand.MAIN_HAND, hit);
+            client.player.setYaw(previousYaw);
             if (result.isAccepted()) {
                 index++;
                 placed++;
