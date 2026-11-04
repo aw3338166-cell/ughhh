@@ -9,6 +9,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.render.RenderLayers;
 import net.minecraft.client.render.VertexConsumer;
+import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.render.VertexRendering;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.shape.VoxelShapes;
@@ -47,6 +48,8 @@ import java.util.ArrayList;
 import java.util.Properties;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Proxy;
 
 public final class SchematicBuilderClient implements ClientModInitializer {
     private static final Path SCHEMATIC_DIR = FabricLoader.getInstance().getConfigDir().resolve("minecraft-ai-build");
@@ -148,7 +151,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
         if (dashboardKey.wasPressed() && client.currentScreen == null) client.setScreen(new BuildDashboardScreen());
         if (rotateKey.wasPressed()) { rotation = (rotation + 1) % 4; tell(client, "Schematic rotation: " + (rotation * 90) + " degrees."); }
         if (layerModeKey.wasPressed()) { layerMode = !layerMode; tell(client, "Layer-by-layer mode " + (layerMode ? "enabled" : "disabled") + "."); }
-        if (ghostKey.wasPressed()) { ghostPreview = !ghostPreview; tell(client, "Ghost preview " + (ghostPreview ? "enabled (wireframe)" : "disabled (solid preview)") + "."); }
+        if (ghostKey.wasPressed()) { ghostPreview = !ghostPreview; tell(client, "Ghost preview " + (ghostPreview ? "enabled (transparent textured blocks)" : "disabled (solid textured blocks)") + "."); }
         if (schematic != null && layerUpKey.wasPressed()) { selectedLayer = Math.min(schematic.height() - 1, selectedLayer + 1); tell(client, "Selected layer: " + selectedLayer + " / " + (schematic.height() - 1)); }
         if (schematic != null && layerDownKey.wasPressed()) { selectedLayer = Math.max(0, selectedLayer - 1); tell(client, "Selected layer: " + selectedLayer + " / " + (schematic.height() - 1)); }
         if (client.currentScreen != null) return;
@@ -357,6 +360,9 @@ public final class SchematicBuilderClient implements ClientModInitializer {
         MatrixStack matrices = context.matrices();
         Vec3d camera = client.gameRenderer.getCamera().getCameraPos();
         VertexConsumer lines = context.consumers().getBuffer(RenderLayers.lines());
+        VertexConsumerProvider previewConsumers = ghostPreview
+                ? translucentPreviewProvider(context.consumers())
+                : context.consumers();
         int rendered = 0;
         matrices.push();
         try {
@@ -376,15 +382,13 @@ public final class SchematicBuilderClient implements ClientModInitializer {
                 double y = target.getY() - camera.y;
                 double z = target.getZ() - camera.z;
 
-                // Full-bright textured model makes the planned block easy to identify.
-                // The cyan outline remains visible around the preview model.
+                // Draw the real block model with its texture. In ghost mode all model
+                // layers are routed through a translucent render layer and tinted cool blue.
                 matrices.push();
                 try {
                     matrices.translate(x, y, z);
-                    if (!ghostPreview) {
-                        client.getBlockRenderManager().renderBlockAsEntity(
-                                state, matrices, context.consumers(), 15728880, OverlayTexture.DEFAULT_UV);
-                    }
+                    client.getBlockRenderManager().renderBlockAsEntity(
+                            state, matrices, previewConsumers, 15728880, OverlayTexture.DEFAULT_UV);
                 } finally {
                     matrices.pop();
                 }
@@ -398,6 +402,43 @@ public final class SchematicBuilderClient implements ClientModInitializer {
         } finally {
             matrices.pop();
         }
+    }
+
+    /**
+     * Routes block-model vertices through the translucent moving-block layer.
+     * The proxy preserves the normal textured model pipeline while changing only
+     * vertex tint/alpha, so the preview remains recognizable without hiding the world.
+     */
+    private static VertexConsumerProvider translucentPreviewProvider(VertexConsumerProvider original) {
+        VertexConsumer translucent = original.getBuffer(RenderLayers.translucentMovingBlock());
+        VertexConsumer tinted = (VertexConsumer) Proxy.newProxyInstance(
+                VertexConsumer.class.getClassLoader(),
+                new Class<?>[]{VertexConsumer.class},
+                (proxy, method, args) -> {
+                    if ("color".equals(method.getName()) && args != null && args.length == 4) {
+                        args[0] = Math.min((Integer) args[0], 205);
+                        args[1] = Math.min((Integer) args[1], 235);
+                        args[2] = 255;
+                        args[3] = Math.min((Integer) args[3], 112);
+                    }
+                    try {
+                        Object result = method.invoke(translucent, args);
+                        return result == translucent ? proxy : result;
+                    } catch (InvocationTargetException exception) {
+                        throw exception.getCause();
+                    }
+                });
+        return (VertexConsumerProvider) Proxy.newProxyInstance(
+                VertexConsumerProvider.class.getClassLoader(),
+                new Class<?>[]{VertexConsumerProvider.class},
+                (proxy, method, args) -> {
+                    if ("getBuffer".equals(method.getName())) return tinted;
+                    try {
+                        return method.invoke(original, args);
+                    } catch (InvocationTargetException exception) {
+                        throw exception.getCause();
+                    }
+                });
     }
 
     private static void showMaterialPreview(MinecraftClient client) {
