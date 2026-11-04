@@ -57,7 +57,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
     private static int index, delayTicks = 6, waitTicks, placed, skipped;
     private static boolean running, paused, layerMode;
     private static int rotation, selectedLayer;
-    private static BlockPos selectedContainerPos;
+    private static final List<BlockPos> selectedContainerPositions = new ArrayList<>();
 
     @Override
     public void onInitializeClient() {
@@ -411,28 +411,30 @@ public final class SchematicBuilderClient implements ClientModInitializer {
         var blockEntity = client.world.getBlockEntity(pos);
         if (!(blockEntity instanceof ChestBlockEntity) && !(blockEntity instanceof ShulkerBoxBlockEntity)) return false;
         if (!(blockEntity instanceof Inventory)) return false;
-        selectedContainerPos = pos.toImmutable();
+        if (!selectedContainerPositions.contains(pos)) selectedContainerPositions.add(pos.toImmutable());
         return true;
     }
 
     public static void clearSelectedContainer() {
-        selectedContainerPos = null;
+        selectedContainerPositions.clear();
     }
 
     public static String selectedContainerLabel() {
-        if (selectedContainerPos == null) return "No chest selected";
-        return "Selected container: " + selectedContainerPos.toShortString();
+        if (selectedContainerPositions.isEmpty()) return "No containers selected";
+        return "Selected containers: " + selectedContainerPositions.size();
     }
 
     public static Map<String, Integer> getSelectedContainerMaterialCounts() {
         Map<String, Integer> counts = new HashMap<>();
         MinecraftClient client = MinecraftClient.getInstance();
-        if (selectedContainerPos == null || client.world == null
-                || !client.world.isChunkLoaded(selectedContainerPos)) return counts;
-        var blockEntity = client.world.getBlockEntity(selectedContainerPos);
-        if (!(blockEntity instanceof Inventory inventory)) return counts;
-        for (int slot = 0; slot < inventory.size(); slot++) {
-            addStackAndShulkerContents(inventory.getStack(slot), counts, 0);
+        if (client.world == null) return counts;
+        for (BlockPos pos : selectedContainerPositions) {
+            if (!client.world.isChunkLoaded(pos)) continue;
+            var blockEntity = client.world.getBlockEntity(pos);
+            if (!(blockEntity instanceof Inventory inventory)) continue;
+            for (int slot = 0; slot < inventory.size(); slot++) {
+                addStackAndShulkerContents(inventory.getStack(slot), counts, 0);
+            }
         }
         return counts;
     }
