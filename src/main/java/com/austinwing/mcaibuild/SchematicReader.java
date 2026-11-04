@@ -194,8 +194,16 @@ public final class SchematicReader {
         return new ParsedBlockState(id, Map.copyOf(properties));
     }
 
+    public static boolean isAirBlockId(String id) {
+        if (id == null) return true;
+        int stateStart = id.indexOf('[');
+        String blockId = stateStart >= 0 ? id.substring(0, stateStart) : id;
+        return blockId.equals("minecraft:air") || blockId.equals("minecraft:cave_air")
+                || blockId.equals("minecraft:void_air");
+    }
+
     private static boolean isAir(String id) {
-        return id.equals("minecraft:air") || id.equals("minecraft:cave_air") || id.equals("minecraft:void_air");
+        return isAirBlockId(id);
     }
 
     private static int number(Object value, int fallback) {
