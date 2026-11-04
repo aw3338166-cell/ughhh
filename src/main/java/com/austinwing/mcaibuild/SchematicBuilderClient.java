@@ -2,6 +2,8 @@ package com.austinwing.mcaibuild;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.minecraft.client.render.OverlayTexture;
@@ -76,6 +78,42 @@ public final class SchematicBuilderClient implements ClientModInitializer {
         layerDownKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.layer_down", GLFW.GLFW_KEY_PAGE_DOWN, category));
         ghostKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.ghost_preview", GLFW.GLFW_KEY_G, category));
         ClientTickEvents.END_CLIENT_TICK.register(SchematicBuilderClient::tick);
+        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
+                dispatcher.register(ClientCommandManager.literal("aibuild")
+                        .then(ClientCommandManager.literal("load").executes(context -> {
+                            loadLatest(MinecraftClient.getInstance());
+                            return 1;
+                        }))
+                        .then(ClientCommandManager.literal("start").executes(context -> {
+                            start(MinecraftClient.getInstance());
+                            return 1;
+                        }))
+                        .then(ClientCommandManager.literal("pause").executes(context -> {
+                            dashboardPause();
+                            return 1;
+                        }))
+                        .then(ClientCommandManager.literal("stop").executes(context -> {
+                            dashboardStop();
+                            return 1;
+                        }))
+                        .then(ClientCommandManager.literal("repair").executes(context -> {
+                            dashboardRepair();
+                            return 1;
+                        }))
+                        .then(ClientCommandManager.literal("materials").executes(context -> {
+                            openMaterials();
+                            return 1;
+                        }))
+                        .then(ClientCommandManager.literal("status").executes(context -> {
+                            MinecraftClient client = MinecraftClient.getInstance();
+                            tell(client, dashboardStatus() + " | " + dashboardProgress());
+                            return 1;
+                        }))
+                        .then(ClientCommandManager.literal("rotate").executes(context -> {
+                            rotation = (rotation + 1) % 4;
+                            tell(MinecraftClient.getInstance(), "Schematic rotation: " + (rotation * 90) + " degrees.");
+                            return 1;
+                        }))));
         WorldRenderEvents.AFTER_ENTITIES.register(SchematicBuilderClient::renderBlueprint);
         try {
             Files.createDirectories(SCHEMATIC_DIR);
@@ -106,10 +144,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
             delayTicks = Math.max(1, delayTicks - 1);
             tell(client, "Build delay: " + delayTicks + " ticks per block.");
         }
-        if (materialsKey.wasPressed() && client.currentScreen == null) {
-            if (schematic == null) tell(client, "Load a schematic first with F6.");
-            else client.setScreen(new MaterialListScreen(schematic));
-        }
+        if (materialsKey.wasPressed() && client.currentScreen == null) openMaterials();
         if (dashboardKey.wasPressed() && client.currentScreen == null) client.setScreen(new BuildDashboardScreen());
         if (rotateKey.wasPressed()) { rotation = (rotation + 1) % 4; tell(client, "Schematic rotation: " + (rotation * 90) + " degrees."); }
         if (layerModeKey.wasPressed()) { layerMode = !layerMode; tell(client, "Layer-by-layer mode " + (layerMode ? "enabled" : "disabled") + "."); }
@@ -453,6 +488,12 @@ public final class SchematicBuilderClient implements ClientModInitializer {
                 addStackAndShulkerContents(nested, counts, depth + 1);
             }
         }
+    }
+
+    public static void openMaterials() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (schematic == null) tell(client, "Load a schematic first with F6.");
+        else if (client.currentScreen == null) client.setScreen(new MaterialListScreen(schematic));
     }
 
     public static void dashboardRepair() {
