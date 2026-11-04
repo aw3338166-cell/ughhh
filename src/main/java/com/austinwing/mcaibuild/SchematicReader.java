@@ -69,6 +69,10 @@ public final class SchematicReader {
             ParsedBlockState parsedState = parseBlockState(id);
             blocks.add(new SchematicData.BlockEntry(x, y, z, parsedState.id(), parsedState.properties()));
         }
+        blocks.sort(Comparator.comparingInt(SchematicData.BlockEntry::y)
+                .thenComparingInt(b -> placementPriority(b.blockId()))
+                .thenComparingInt(SchematicData.BlockEntry::z)
+                .thenComparingInt(SchematicData.BlockEntry::x));
         return new SchematicData(path.getFileName().toString(), width, height, length, List.copyOf(blocks));
     }
 
@@ -134,10 +138,6 @@ public final class SchematicReader {
         int width = maxX - minX + 1, height = maxY - minY + 1, length = maxZ - minZ + 1;
         List<SchematicData.BlockEntry> blocks = new ArrayList<>(raw.size());
         for (Raw b : raw) blocks.add(new SchematicData.BlockEntry(b.x-minX, b.y-minY, b.z-minZ, b.id, b.properties));
-        blocks.sort(Comparator.comparingInt(SchematicData.BlockEntry::y)
-                .thenComparingInt(b -> placementPriority(b.blockId()))
-                .thenComparingInt(SchematicData.BlockEntry::z)
-                .thenComparingInt(SchematicData.BlockEntry::x));
         blocks.sort(Comparator.comparingInt(SchematicData.BlockEntry::y)
                 .thenComparingInt(b -> placementPriority(b.blockId()))
                 .thenComparingInt(SchematicData.BlockEntry::z)
