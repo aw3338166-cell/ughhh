@@ -23,6 +23,8 @@ public final class BuildDashboardScreen extends Screen {
                 SchematicBuilderClient.dashboardPause()).dimensions(left + 14 + buttonWidth, top + 88, buttonWidth, 20).build());
         addDrawableChild(ButtonWidget.builder(Text.literal("Stop"), b ->
                 SchematicBuilderClient.dashboardStop()).dimensions(left + 18 + buttonWidth * 2, top + 88, buttonWidth, 20).build());
+        addDrawableChild(ButtonWidget.builder(Text.literal("Repair missing"), b ->
+                SchematicBuilderClient.dashboardRepair()).dimensions(left + 10, top + 118, 150, 20).build());
         addDrawableChild(ButtonWidget.builder(Text.literal("Close"), b -> close())
                 .dimensions(left + panelWidth - 90, top + 118, 80, 20).build());
     }
@@ -34,7 +36,7 @@ public final class BuildDashboardScreen extends Screen {
         int panelWidth = Math.min(360, width - 24);
         int left = (width - panelWidth) / 2;
         int top = height / 2 - 92;
-        context.fill(left, top, left + panelWidth, top + 154, 0xEE15191F);
+        context.fill(left, top, left + panelWidth, top + 178, 0xEE15191F);
         context.fill(left, top, left + panelWidth, top + 2, 0xFF55B7FF);
         context.drawCenteredTextWithShadow(textRenderer, "AI BUILD DASHBOARD", width / 2, top + 12, 0xFFFFFFFF);
         context.drawTextWithShadow(textRenderer, "Schematic: " + SchematicBuilderClient.dashboardSchematicName(), left + 14, top + 34, 0xFFE3EAF2);
