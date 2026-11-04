@@ -26,6 +26,7 @@ import net.minecraft.inventory.Inventory;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.item.ItemStack;
+import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.registry.Registries;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
@@ -222,9 +223,8 @@ public final class SchematicBuilderClient implements ClientModInitializer {
             Block block = Registries.BLOCK.get(Identifier.of(entry.blockId()));
             BlockState desired = schematicState(block, entry);
 
-            if (block == net.minecraft.block.Blocks.AIR) {
+            if (SchematicReader.isAirBlockId(entry.blockId()) || block == net.minecraft.block.Blocks.AIR) {
                 index++;
-                skipped++;
                 continue;
             }
             BlockState existing = client.world.getBlockState(target);
@@ -443,7 +443,9 @@ public final class SchematicBuilderClient implements ClientModInitializer {
 
     private static void showMaterialPreview(MinecraftClient client) {
         Map<String, Integer> required = new HashMap<>();
-        for (SchematicData.BlockEntry entry : schematic.blocks()) required.merge(entry.blockId(), 1, Integer::sum);
+        for (SchematicData.BlockEntry entry : schematic.blocks()) {
+            if (!SchematicReader.isAirBlockId(entry.blockId())) required.merge(entry.blockId(), 1, Integer::sum);
+        }
         List<String> missing = new ArrayList<>();
         for (Map.Entry<String, Integer> entry : required.entrySet()) {
             int available = 0;
@@ -460,9 +462,27 @@ public final class SchematicBuilderClient implements ClientModInitializer {
     }
 
     private static int findHotbarItem(MinecraftClient client, String blockId) {
+        // Prefer an existing hotbar stack. If the item is elsewhere in the main
+        // inventory, swap it into the first hotbar slot so the builder can use it.
         for (int slot = 0; slot < 9; slot++) {
             ItemStack stack = client.player.getInventory().getStack(slot);
             if (!stack.isEmpty() && Registries.ITEM.getId(stack.getItem()).toString().equals(blockId)) return slot;
+        }
+        for (int inventorySlot = 9; inventorySlot < 36; inventorySlot++) {
+            ItemStack stack = client.player.getInventory().getStack(inventorySlot);
+            if (!stack.isEmpty() && Registries.ITEM.getId(stack.getItem()).toString().equals(blockId)) {
+                int hotbarSlot = 0;
+                for (int candidate = 0; candidate < 9; candidate++) {
+                    if (client.player.getInventory().getStack(candidate).isEmpty()) {
+                        hotbarSlot = candidate;
+                        break;
+                    }
+                }
+                if (client.interactionManager == null) return -1;
+                client.interactionManager.clickSlot(client.player.currentScreenHandler.syncId,
+                        inventorySlot, hotbarSlot, SlotActionType.SWAP, client.player);
+                return hotbarSlot;
+            }
         }
         return -1;
     }
