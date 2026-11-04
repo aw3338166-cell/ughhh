@@ -194,7 +194,7 @@ public final class MaterialListScreen extends Screen {
         for (int i = scroll; i < Math.min(filtered.size(), scroll + visibleRows()); i++) {
             MaterialRow row = filtered.get(i);
             int y = listTop + (i - scroll) * 23;
-            boolean ready = row.hotbarAvailable() + row.inventoryAvailable() + row.storedAvailable() >= row.required();
+            boolean ready = row.inventoryAvailable() + row.storedAvailable() >= row.required();
             Item item = Registries.BLOCK.get(Identifier.of(row.id())).asItem();
             if (item != null) context.drawItem(new ItemStack(item), left + 18, y + 1);
             context.drawTextWithShadow(textRenderer, row.name(), left + 42, y + 6, 0xFFFFFFFF);
