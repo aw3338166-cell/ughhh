@@ -214,7 +214,17 @@ public final class SchematicBuilderClient implements ClientModInitializer {
             if (desiredFacing != null) {
                 try {
                     Direction facing = Direction.valueOf(rotateProperty("facing", desiredFacing).toUpperCase(java.util.Locale.ROOT));
-                    if (facing.getAxis().isHorizontal()) client.player.setYaw(facing.getOpposite().asRotation());
+                    if (facing.getAxis().isHorizontal()) {
+                        Direction playerFacing = facing.getOpposite();
+                        float yaw = switch (playerFacing) {
+                            case SOUTH -> 0.0F;
+                            case WEST -> 90.0F;
+                            case NORTH -> 180.0F;
+                            case EAST -> -90.0F;
+                            default -> previousYaw;
+                        };
+                        client.player.setYaw(yaw);
+                    }
                 } catch (IllegalArgumentException ignored) { }
             }
             ActionResult result = client.interactionManager.interactBlock(client.player, Hand.MAIN_HAND, hit);
@@ -262,7 +272,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
             try {
                 Direction direction = Direction.valueOf(value.toUpperCase(java.util.Locale.ROOT));
                 for (int i = 0; i < rotation; i++) direction = direction.rotateYClockwise();
-                return direction.getName();
+                return direction.asString();
             } catch (IllegalArgumentException ignored) { return value; }
         }
         if (key.equals("axis") && rotation % 2 == 1) {
