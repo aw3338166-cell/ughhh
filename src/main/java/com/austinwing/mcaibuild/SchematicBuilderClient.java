@@ -51,11 +51,11 @@ public final class SchematicBuilderClient implements ClientModInitializer {
     private static final int MAX_SKIP_PER_TICK = 64;
     private static final Path RECOVERY_FILE = SCHEMATIC_DIR.resolve("build-progress.properties");
 
-    private static KeyBinding loadKey, startKey, pauseKey, stopKey, slowerKey, fasterKey, materialsKey, dashboardKey, rotateKey, layerModeKey, layerUpKey, layerDownKey;
+    private static KeyBinding loadKey, startKey, pauseKey, stopKey, slowerKey, fasterKey, materialsKey, dashboardKey, rotateKey, layerModeKey, layerUpKey, layerDownKey, ghostKey;
     private static SchematicData schematic;
     private static BlockPos origin;
     private static int index, delayTicks = 6, waitTicks, placed, skipped;
-    private static boolean running, paused, layerMode;
+    private static boolean running, paused, layerMode, ghostPreview = true;
     private static int rotation, selectedLayer;
     private static final List<BlockPos> selectedContainerPositions = new ArrayList<>();
 
@@ -74,6 +74,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
         layerModeKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.layer_mode", GLFW.GLFW_KEY_L, category));
         layerUpKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.layer_up", GLFW.GLFW_KEY_PAGE_UP, category));
         layerDownKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.layer_down", GLFW.GLFW_KEY_PAGE_DOWN, category));
+        ghostKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.ghost_preview", GLFW.GLFW_KEY_G, category));
         ClientTickEvents.END_CLIENT_TICK.register(SchematicBuilderClient::tick);
         WorldRenderEvents.AFTER_ENTITIES.register(SchematicBuilderClient::renderBlueprint);
         try {
@@ -112,6 +113,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
         if (dashboardKey.wasPressed() && client.currentScreen == null) client.setScreen(new BuildDashboardScreen());
         if (rotateKey.wasPressed()) { rotation = (rotation + 1) % 4; tell(client, "Schematic rotation: " + (rotation * 90) + " degrees."); }
         if (layerModeKey.wasPressed()) { layerMode = !layerMode; tell(client, "Layer-by-layer mode " + (layerMode ? "enabled" : "disabled") + "."); }
+        if (ghostKey.wasPressed()) { ghostPreview = !ghostPreview; tell(client, "Ghost preview " + (ghostPreview ? "enabled (wireframe)" : "disabled (solid preview)") + "."); }
         if (schematic != null && layerUpKey.wasPressed()) { selectedLayer = Math.min(schematic.height() - 1, selectedLayer + 1); tell(client, "Selected layer: " + selectedLayer + " / " + (schematic.height() - 1)); }
         if (schematic != null && layerDownKey.wasPressed()) { selectedLayer = Math.max(0, selectedLayer - 1); tell(client, "Selected layer: " + selectedLayer + " / " + (schematic.height() - 1)); }
         if (client.currentScreen != null) return;
@@ -344,15 +346,17 @@ public final class SchematicBuilderClient implements ClientModInitializer {
                 matrices.push();
                 try {
                     matrices.translate(x, y, z);
-                    client.getBlockRenderManager().renderBlockAsEntity(
-                            state, matrices, context.consumers(), 15728880, OverlayTexture.DEFAULT_UV);
+                    if (!ghostPreview) {
+                        client.getBlockRenderManager().renderBlockAsEntity(
+                                state, matrices, context.consumers(), 15728880, OverlayTexture.DEFAULT_UV);
+                    }
                 } finally {
                     matrices.pop();
                 }
 
                 var shape = state.getOutlineShape(client.world, target);
                 if (!shape.isEmpty()) {
-                    VertexRendering.drawOutline(matrices, lines, shape, x, y, z, 0xFF35D9FF, 1.5F);
+                    VertexRendering.drawOutline(matrices, lines, shape, x, y, z, ghostPreview ? 0x8035D9FF : 0xFF35D9FF, 1.5F);
                 }
                 rendered++;
             }
