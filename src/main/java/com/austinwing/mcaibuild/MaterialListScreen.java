@@ -94,11 +94,13 @@ public final class MaterialListScreen extends Screen {
         Map<String, Integer> storedCounts = SchematicBuilderClient.getSelectedContainerMaterialCounts();
         Map<String, Integer> required = new HashMap<>();
         for (SchematicData.BlockEntry entry : schematic.blocks()) {
+            if (SchematicReader.isAirBlockId(entry.blockId())) continue;
             required.merge(entry.blockId(), 1, Integer::sum);
         }
 
         for (Map.Entry<String, Integer> entry : required.entrySet()) {
             Item item = Registries.BLOCK.get(Identifier.of(entry.getKey())).asItem();
+            if (item == net.minecraft.item.Items.AIR) continue;
             String itemId = Registries.ITEM.getId(item).toString();
             int hotbar = countInventory(itemId, true);
             int inventory = countInventory(itemId, false);
