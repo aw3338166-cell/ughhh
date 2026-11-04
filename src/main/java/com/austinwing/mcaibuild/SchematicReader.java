@@ -135,8 +135,27 @@ public final class SchematicReader {
         List<SchematicData.BlockEntry> blocks = new ArrayList<>(raw.size());
         for (Raw b : raw) blocks.add(new SchematicData.BlockEntry(b.x-minX, b.y-minY, b.z-minZ, b.id, b.properties));
         blocks.sort(Comparator.comparingInt(SchematicData.BlockEntry::y)
-                .thenComparingInt(SchematicData.BlockEntry::z).thenComparingInt(SchematicData.BlockEntry::x));
+                .thenComparingInt(b -> placementPriority(b.blockId()))
+                .thenComparingInt(SchematicData.BlockEntry::z)
+                .thenComparingInt(SchematicData.BlockEntry::x));
+        blocks.sort(Comparator.comparingInt(SchematicData.BlockEntry::y)
+                .thenComparingInt(b -> placementPriority(b.blockId()))
+                .thenComparingInt(SchematicData.BlockEntry::z)
+                .thenComparingInt(SchematicData.BlockEntry::x));
         return new SchematicData(path.getFileName().toString(), width, height, length, List.copyOf(blocks));
+    }
+
+    private static int placementPriority(String blockId) {
+        String path = blockId.substring(blockId.indexOf(':') + 1);
+        if (path.contains("wall_torch") || path.contains("wall_sign") || path.contains("wall_hanging_sign")
+                || path.contains("ladder") || path.contains("wall_banner") || path.contains("wall_head")
+                || path.contains("wall_skull") || path.contains("button") || path.contains("lever")
+                || path.contains("tripwire_hook") || path.contains("redstone_wire") || path.contains("repeater")
+                || path.contains("comparator")) return 2;
+        if (path.contains("door") || path.contains("trapdoor") || path.contains("fence_gate")
+                || path.contains("stairs") || path.contains("slab") || path.contains("fence")
+                || path.contains("pane") || path.contains("rail")) return 1;
+        return 0;
     }
 
     /** Litematica packs floor(64 / bits) values into each long; values never straddle longs. */
