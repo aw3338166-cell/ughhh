@@ -238,7 +238,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
                 continue;
             }
 
-            BlockHitResult hit = findSupport(client, target);
+            BlockHitResult hit = findSupport(client, target, entry);
             if (hit == null) {
                 index++;
                 skipped++;
@@ -426,7 +426,23 @@ public final class SchematicBuilderClient implements ClientModInitializer {
         return -1;
     }
 
-    private static BlockHitResult findSupport(MinecraftClient client, BlockPos target) {
+    private static BlockHitResult findSupport(MinecraftClient client, BlockPos target, SchematicData.BlockEntry entry) {
+        String path = entry.blockId().substring(entry.blockId().indexOf(':') + 1);
+        String facingName = entry.properties().get("facing");
+        boolean wallMounted = path.contains("wall_") || path.equals("ladder")
+                || path.endsWith("_wall_sign") || path.endsWith("_wall_hanging_sign");
+        if (wallMounted && facingName != null) {
+            try {
+                Direction facing = Direction.valueOf(rotateProperty("facing", facingName).toUpperCase(java.util.Locale.ROOT));
+                BlockPos support = target.offset(facing.getOpposite());
+                BlockState supportState = client.world.getBlockState(support);
+                if (supportState.isSideSolidFullSquare(client.world, support, facing)) {
+                    Vec3d point = Vec3d.ofCenter(support).add(
+                            facing.getOffsetX() * 0.5, facing.getOffsetY() * 0.5, facing.getOffsetZ() * 0.5);
+                    return new BlockHitResult(point, facing, support, false);
+                }
+            } catch (IllegalArgumentException ignored) { }
+        }
         for (Direction direction : Direction.values()) {
             BlockPos neighbor = target.offset(direction);
             BlockState state = client.world.getBlockState(neighbor);
