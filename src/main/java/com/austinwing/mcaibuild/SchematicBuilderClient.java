@@ -455,6 +455,27 @@ public final class SchematicBuilderClient implements ClientModInitializer {
         }
     }
 
+    public static void dashboardRepair() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (schematic == null || client.player == null || client.world == null) {
+            tell(client, "Load a schematic first with F6.");
+            return;
+        }
+        if (client.player.isSpectator()) {
+            tell(client, "Repair pass cannot run in spectator mode.");
+            return;
+        }
+        if (origin == null) origin = client.player.getBlockPos().offset(client.player.getHorizontalFacing(), 3);
+        index = 0;
+        placed = 0;
+        skipped = 0;
+        waitTicks = 0;
+        paused = false;
+        clearRecovery();
+        running = true;
+        tell(client, "Repair pass started. It will fill missing spaces and leave existing blocks untouched. Wrong occupied blocks are reported as skipped.");
+    }
+
     public static void dashboardStart() {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player != null && client.world != null) start(client);
