@@ -61,12 +61,12 @@ public final class MaterialListScreen extends Screen {
                 }).dimensions(left + 14, top + panelHeight - 28, 78, 20).build());
         addDrawableChild(ButtonWidget.builder(Text.literal("Copy missing"), button -> copyMissingList())
                 .dimensions(left + 96, top + panelHeight - 28, 90, 20).build());
-        addDrawableChild(ButtonWidget.builder(Text.literal("Select chest"), button -> {
+        addDrawableChild(ButtonWidget.builder(Text.literal("Add box"), button -> {
                     if (SchematicBuilderClient.selectLookedAtContainer()) {
-                        button.setMessage(Text.literal("Chest selected"));
+                        button.setMessage(Text.literal("Box added"));
                         refreshRows();
                     } else if (client != null && client.player != null) {
-                        client.player.sendMessage(Text.literal("[AI Build] Look directly at a chest or shulker box within 6 blocks, then select it."), false);
+                        client.player.sendMessage(Text.literal("[AI Build] Look at a chest or shulker box within 6 blocks, then press Add box."), false);
                     }
                 }).dimensions(left + 190, top + panelHeight - 28, 90, 20).build());
         addDrawableChild(ButtonWidget.builder(Text.literal("Refresh"), button -> refreshRows())
@@ -135,14 +135,14 @@ public final class MaterialListScreen extends Screen {
         StringBuilder text = new StringBuilder("Minecraft AI Build - Missing hotbar materials\n");
         boolean any = false;
         for (MaterialRow row : rows) {
-            int missing = Math.max(0, row.required() - row.hotbarAvailable());
+            int missing = Math.max(0, row.required() - row.inventoryAvailable() - row.storedAvailable());
             if (missing > 0) {
                 text.append(row.name()).append(" x").append(missing)
                         .append(" (inventory total: ").append(row.inventoryAvailable()).append(")\n");
                 any = true;
             }
         }
-        if (!any) text.append("No missing hotbar materials.");
+        if (!any) text.append("No missing materials.");
         client.keyboard.setClipboard(text.toString());
         if (client.player != null) client.player.sendMessage(Text.literal("[AI Build] Missing-material list copied."), false);
     }
@@ -194,7 +194,7 @@ public final class MaterialListScreen extends Screen {
         for (int i = scroll; i < Math.min(filtered.size(), scroll + visibleRows()); i++) {
             MaterialRow row = filtered.get(i);
             int y = listTop + (i - scroll) * 23;
-            boolean ready = row.hotbarAvailable() >= row.required();
+            boolean ready = row.hotbarAvailable() + row.inventoryAvailable() + row.storedAvailable() >= row.required();
             Item item = Registries.BLOCK.get(Identifier.of(row.id())).asItem();
             if (item != null) context.drawItem(new ItemStack(item), left + 18, y + 1);
             context.drawTextWithShadow(textRenderer, row.name(), left + 42, y + 6, 0xFFFFFFFF);
