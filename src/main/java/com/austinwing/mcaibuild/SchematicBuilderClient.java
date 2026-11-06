@@ -594,6 +594,25 @@ public final class SchematicBuilderClient implements ClientModInitializer {
         tell(client, "Repair pass started. It will fill missing spaces and leave existing blocks untouched. Wrong occupied blocks are reported as skipped.");
     }
 
+    public static void dashboardLoadLatest() { loadLatest(MinecraftClient.getInstance()); }
+
+    public static void dashboardOpenMaterials() { openMaterials(); }
+
+    public static void dashboardRotate() {
+        rotation = (rotation + 1) % 4;
+        tell(MinecraftClient.getInstance(), "Schematic rotation: " + (rotation * 90) + " degrees.");
+    }
+
+    public static void dashboardToggleLayerMode() {
+        layerMode = !layerMode;
+        tell(MinecraftClient.getInstance(), "Layer-by-layer mode " + (layerMode ? "enabled" : "disabled") + ".");
+    }
+
+    public static void dashboardTogglePreview() {
+        ghostPreview = !ghostPreview;
+        tell(MinecraftClient.getInstance(), "Ghost preview " + (ghostPreview ? "enabled" : "disabled") + ".");
+    }
+
     public static void dashboardStart() {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player != null && client.world != null) start(client);
