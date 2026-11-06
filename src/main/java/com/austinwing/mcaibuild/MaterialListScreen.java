@@ -20,6 +20,8 @@ import java.util.Map;
 public final class MaterialListScreen extends Screen {
     private final SchematicData schematic;
     private final List<MaterialRow> rows = new ArrayList<>();
+    private static final Map<String, Integer> MANUAL_REQUIREMENTS = new HashMap<>();
+    private TextFieldWidget manualField;
     private TextFieldWidget searchField;
     private String search = "";
     private int scroll;
@@ -28,7 +30,7 @@ public final class MaterialListScreen extends Screen {
     private int totalStoredAvailable;
     private boolean missingOnly;
 
-    private record MaterialRow(String id, String name, int required, int hotbarAvailable, int inventoryAvailable, int storedAvailable) {}
+    private record MaterialRow(String id, String name, int required, int hotbarAvailable, int inventoryAvailable, int storedAvailable, boolean manual) {}
 
     public MaterialListScreen(SchematicData schematic) {
         super(Text.literal("Build Materials"));
@@ -43,7 +45,17 @@ public final class MaterialListScreen extends Screen {
         left = (width - panelWidth) / 2;
         top = (height - panelHeight) / 2;
 
-        searchField = new TextFieldWidget(textRenderer, left + 14, top + 48,
+        manualField = new TextFieldWidget(textRenderer, left + 14, top + 48,
+                panelWidth - 142, 20, Text.literal("Add material"));
+        manualField.setPlaceholder(Text.literal("Block ID and amount, e.g. minecraft:stone 64"));
+        manualField.setMaxLength(96);
+        addDrawableChild(manualField);
+        addDrawableChild(ButtonWidget.builder(Text.literal("Add"), button -> addManualMaterial())
+                .dimensions(left + panelWidth - 122, top + 48, 52, 20).build());
+        addDrawableChild(ButtonWidget.builder(Text.literal("Remove"), button -> removeManualMaterial())
+                .dimensions(left + panelWidth - 66, top + 48, 52, 20).build());
+
+        searchField = new TextFieldWidget(textRenderer, left + 14, top + 72,
                 panelWidth - 28, 20, Text.literal("Search materials"));
         searchField.setPlaceholder(Text.literal("Search blocks..."));
         searchField.setMaxLength(64);
@@ -98,6 +110,10 @@ public final class MaterialListScreen extends Screen {
             required.merge(entry.blockId(), 1, Integer::sum);
         }
 
+        for (Map.Entry<String, Integer> manual : MANUAL_REQUIREMENTS.entrySet()) {
+            required.merge(manual.getKey(), manual.getValue(), Integer::sum);
+        }
+
         for (Map.Entry<String, Integer> entry : required.entrySet()) {
             Item item = Registries.BLOCK.get(Identifier.of(entry.getKey())).asItem();
             if (item == net.minecraft.item.Items.AIR) continue;
@@ -106,7 +122,8 @@ public final class MaterialListScreen extends Screen {
             int inventory = countInventory(itemId, false);
             int stored = storedCounts.getOrDefault(itemId, 0);
             String name = new ItemStack(item).getName().getString();
-            rows.add(new MaterialRow(entry.getKey(), name, entry.getValue(), hotbar, inventory, stored));
+            rows.add(new MaterialRow(entry.getKey(), name, entry.getValue(), hotbar, inventory, stored,
+                    MANUAL_REQUIREMENTS.containsKey(entry.getKey())));
             totalRequired += entry.getValue();
             totalHotbarAvailable += Math.min(entry.getValue(), hotbar);
             totalInventoryAvailable += Math.min(entry.getValue(), inventory + stored);
@@ -130,6 +147,49 @@ public final class MaterialListScreen extends Screen {
             if (!offhand.isEmpty() && Registries.ITEM.getId(offhand.getItem()).toString().equals(id)) count += offhand.getCount();
         }
         return count;
+    }
+
+    private void addManualMaterial() {
+        if (manualField == null) return;
+        String raw = manualField.getText().trim();
+        if (raw.isEmpty()) return;
+        String[] parts = raw.split("\\s+");
+        String idText = parts[0].toLowerCase(java.util.Locale.ROOT);
+        int amount = 1;
+        if (parts.length > 1) {
+            String countText = parts[1].toLowerCase(java.util.Locale.ROOT).replace("x", "");
+            try { amount = Integer.parseInt(countText); }
+            catch (NumberFormatException ignored) { amount = -1; }
+        }
+        if (amount < 1 || amount > 64000) {
+            if (client != null && client.player != null) client.player.sendMessage(Text.literal("[AI Build] Enter an amount from 1 to 64000."), false);
+            return;
+        }
+        if (!idText.contains(":")) idText = "minecraft:" + idText;
+        try {
+            Identifier id = Identifier.of(idText);
+            var block = Registries.BLOCK.get(id);
+            Item item = block.asItem();
+            if (block == net.minecraft.block.Blocks.AIR || item == net.minecraft.item.Items.AIR) {
+                if (client != null && client.player != null) client.player.sendMessage(Text.literal("[AI Build] That block ID is not a usable material."), false);
+                return;
+            }
+            MANUAL_REQUIREMENTS.merge(id.toString(), amount, Integer::sum);
+            manualField.setText("");
+            refreshRows();
+        } catch (Exception ignored) {
+            if (client != null && client.player != null) client.player.sendMessage(Text.literal("[AI Build] Invalid block ID. Try minecraft:stone."), false);
+        }
+    }
+
+    private void removeManualMaterial() {
+        if (manualField == null) return;
+        String raw = manualField.getText().trim();
+        if (raw.isEmpty()) return;
+        String idText = raw.split("\\s+")[0].toLowerCase(java.util.Locale.ROOT);
+        if (!idText.contains(":")) idText = "minecraft:" + idText;
+        MANUAL_REQUIREMENTS.remove(idText);
+        refreshRows();
     }
 
     private void copyMissingList() {
@@ -173,21 +233,21 @@ public final class MaterialListScreen extends Screen {
         context.fill(left, top, left + panelWidth, top + panelHeight, 0xEE15191F);
         context.fill(left, top, left + panelWidth, top + 2, 0xFF55B7FF);
         context.drawCenteredTextWithShadow(textRenderer, "BUILD MATERIALS", width / 2, top + 12, 0xFFFFFFFF);
-        context.drawTextWithShadow(textRenderer, schematic.name(), left + 14, top + 34, 0xFFB8C7D9);
+        context.drawTextWithShadow(textRenderer, schematic.name() + " | Add/remove custom requirements above", left + 14, top + 34, 0xFFB8C7D9);
 
         int percent = totalRequired == 0 ? 100 : (int) (totalHotbarAvailable * 100L / totalRequired);
-        context.fill(left + 14, top + 75, left + panelWidth - 14, top + 82, 0xFF343B45);
+        context.fill(left + 14, top + 100, left + panelWidth - 14, top + 107, 0xFF343B45);
         int barWidth = (panelWidth - 28) * percent / 100;
-        if (barWidth > 0) context.fill(left + 14, top + 75, left + 14 + barWidth, top + 82, 0xFF55C98A);
+        if (barWidth > 0) context.fill(left + 14, top + 100, left + 14 + barWidth, top + 107, 0xFF55C98A);
         context.drawTextWithShadow(textRenderer,
                 "Hotbar ready: " + totalHotbarAvailable + " / " + totalRequired
                         + " | Inventory total: " + totalInventoryAvailable + " (" + percent + "% hotbar)",
-                left + 14, top + 87, 0xFFE3EAF2);
+                left + 14, top + 112, 0xFFE3EAF2);
         context.drawTextWithShadow(textRenderer, SchematicBuilderClient.selectedContainerLabel()
                 + " | Stored materials counted: " + totalStoredAvailable,
-                left + 14, top + 102, 0xFF9FD5FF);
+                left + 14, top + 127, 0xFF9FD5FF);
 
-        int listTop = top + 126;
+        int listTop = top + 148;
         int listBottom = top + panelHeight - 38;
         context.fill(left + 10, listTop - 5, left + panelWidth - 10, listBottom, 0x88252D38);
         context.enableScissor(left + 10, listTop, left + panelWidth - 10, listBottom);
@@ -199,7 +259,7 @@ public final class MaterialListScreen extends Screen {
             boolean ready = row.inventoryAvailable() + row.storedAvailable() >= row.required();
             Item item = Registries.BLOCK.get(Identifier.of(row.id())).asItem();
             if (item != null) context.drawItem(new ItemStack(item), left + 18, y + 1);
-            context.drawTextWithShadow(textRenderer, row.name(), left + 42, y + 6, 0xFFFFFFFF);
+            context.drawTextWithShadow(textRenderer, row.name() + (row.manual() ? "  +manual" : ""), left + 42, y + 6, 0xFFFFFFFF);
             String amount = "H:" + row.hotbarAvailable() + " Inv:" + row.inventoryAvailable()
                     + " Box:" + row.storedAvailable() + " Req:" + row.required();
             int amountWidth = textRenderer.getWidth(amount);
