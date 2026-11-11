@@ -308,7 +308,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
     }
 
     private static boolean walkIntoPlacementRange(MinecraftClient client, BlockPos target, BlockHitResult hit) {
-        Vec3d playerPos = client.player.getPos().add(0.0, client.player.getStandingEyeHeight() * 0.5, 0.0);
+        Vec3d playerPos = new Vec3d(client.player.getX(), client.player.getY() + client.player.getStandingEyeHeight() * 0.5, client.player.getZ());
         Vec3d hitPos = hit.getPos();
         double distance = playerPos.distanceTo(hitPos);
 
