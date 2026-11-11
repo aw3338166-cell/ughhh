@@ -63,6 +63,10 @@ public final class SchematicBuilderClient implements ClientModInitializer {
     private static int index, delayTicks = 6, waitTicks, placed, skipped;
     private static boolean running, paused, layerMode, ghostPreview = true;
     private static int rotation, selectedLayer;
+    private static BlockPos walkingForTarget;
+    private static int walkingTicks;
+    private static final int MAX_WALK_TICKS = 240;
+    private static final double PLACE_REACH_DISTANCE = 4.0;
     private static final List<BlockPos> selectedContainerPositions = new ArrayList<>();
 
     @Override
@@ -133,11 +137,13 @@ public final class SchematicBuilderClient implements ClientModInitializer {
         if (startKey.wasPressed()) start(client);
         if (pauseKey.wasPressed() && running) {
             paused = !paused;
+            if (paused) stopWalking(client);
             tell(client, paused ? "Builder paused." : "Builder resumed.");
         }
         if (stopKey.wasPressed() && running) {
             running = false;
             paused = false;
+            stopWalking(client);
             tell(client, "Builder stopped. Placed: " + placed + ", skipped: " + skipped + ".");
         }
         if (slowerKey.wasPressed()) {
@@ -155,8 +161,11 @@ public final class SchematicBuilderClient implements ClientModInitializer {
         if (ghostKey.wasPressed()) { ghostPreview = !ghostPreview; tell(client, "Ghost preview " + (ghostPreview ? "enabled (transparent textured blocks)" : "disabled (solid textured blocks)") + "."); }
         if (schematic != null && layerUpKey.wasPressed()) { selectedLayer = Math.min(schematic.height() - 1, selectedLayer + 1); tell(client, "Selected layer: " + selectedLayer + " / " + (schematic.height() - 1)); }
         if (schematic != null && layerDownKey.wasPressed()) { selectedLayer = Math.max(0, selectedLayer - 1); tell(client, "Selected layer: " + selectedLayer + " / " + (schematic.height() - 1)); }
-        if (client.currentScreen != null) return;
-        if (!running || paused || schematic == null || client.interactionManager == null) return;
+        if (client.currentScreen != null) { stopWalking(client); return; }
+        if (!running || paused || schematic == null || client.interactionManager == null) {
+            stopWalking(client);
+            return;
+        }
         if (waitTicks > 0) { waitTicks--; return; }
         placeNext(client);
     }
@@ -248,6 +257,10 @@ public final class SchematicBuilderClient implements ClientModInitializer {
                 continue;
             }
 
+            // Walk toward the support face before attempting placement. This first
+            // navigation pass is deliberately limited to direct, open-ground routes.
+            if (!walkIntoPlacementRange(client, target, hit)) return;
+
             client.player.getInventory().setSelectedSlot(slot);
             float previousYaw = client.player.getYaw();
             String desiredFacing = entry.properties().get("facing");
@@ -270,6 +283,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
             ActionResult result = client.interactionManager.interactBlock(client.player, Hand.MAIN_HAND, hit);
             client.player.setYaw(previousYaw);
             if (result.isAccepted()) {
+                stopWalking(client);
                 index++;
                 placed++;
                 saveRecovery();
@@ -278,6 +292,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
             }
 
             running = false;
+            stopWalking(client);
             tell(client, "Server/game rejected placement at " + target.toShortString() +
                     ". Builder stopped; check permissions and placement rules.");
             return;
@@ -285,10 +300,52 @@ public final class SchematicBuilderClient implements ClientModInitializer {
 
         if (index >= blocks.size()) {
             running = false;
+            stopWalking(client);
             clearRecovery();
             tell(client, "Build pass finished. Placed: " + placed + ", skipped: " + skipped +
                     ". Some skipped blocks may need orientation/support or more materials.");
         }
+    }
+
+    private static boolean walkIntoPlacementRange(MinecraftClient client, BlockPos target, BlockHitResult hit) {
+        Vec3d playerPos = client.player.getPos().add(0.0, client.player.getStandingEyeHeight() * 0.5, 0.0);
+        Vec3d hitPos = hit.getPos();
+        double distance = playerPos.distanceTo(hitPos);
+
+        if (distance <= PLACE_REACH_DISTANCE) {
+            stopWalking(client);
+            return true;
+        }
+
+        if (!target.equals(walkingForTarget)) {
+            walkingForTarget = target.toImmutable();
+            walkingTicks = 0;
+        }
+
+        if (walkingTicks++ >= MAX_WALK_TICKS) {
+            running = false;
+            stopWalking(client);
+            tell(client, "Could not walk within placement range of " + target.toShortString()
+                    + ". Route may be blocked or the position may need advanced pathfinding.");
+            return false;
+        }
+
+        double dx = hitPos.x - client.player.getX();
+        double dz = hitPos.z - client.player.getZ();
+        float yaw = (float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0);
+        client.player.setYaw(yaw);
+        client.options.forwardKey.setPressed(true);
+        client.options.jumpKey.setPressed(false);
+        return false;
+    }
+
+    private static void stopWalking(MinecraftClient client) {
+        if (client.options != null) {
+            client.options.forwardKey.setPressed(false);
+            client.options.jumpKey.setPressed(false);
+        }
+        walkingForTarget = null;
+        walkingTicks = 0;
     }
 
     private static BlockState schematicState(Block block, SchematicData.BlockEntry entry) {
