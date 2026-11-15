@@ -58,7 +58,7 @@ public final class RedstoneSoundDetector {
         if (client.player == null) return "--";
         double dx = detection.x() - client.player.getX();
         double dz = detection.z() - client.player.getZ();
-        String[] directions = {"S", "SW", "W", "NW", "N", "NE", "E", "SE"};
+        String[] directions = {"S", "SE", "E", "NE", "N", "NW", "W", "SW"};
         int index = Math.floorMod((int) Math.round(Math.toDegrees(Math.atan2(dx, dz)) / 45.0), 8);
         return directions[index];
     }
