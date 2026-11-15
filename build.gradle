@@ -2,6 +2,12 @@ plugins {
     id 'fabric-loom' version '1.14-SNAPSHOT'
 }
 
+loom {
+    mixin {
+        defaultRefmapName = "minecraft_ai_build-refmap.json"
+    }
+}
+
 version = project.mod_version
 group = project.maven_group
 base {
