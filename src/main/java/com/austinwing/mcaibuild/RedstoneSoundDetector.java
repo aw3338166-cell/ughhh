@@ -51,6 +51,24 @@ public final class RedstoneSoundDetector {
     public static int getRange() { return RANGES[rangeIndex]; }
     public static void cycleRange() { rangeIndex = (rangeIndex + 1) % RANGES.length; }
     public static List<Detection> getRecent() { return new ArrayList<>(RECENT); }
+    public static Detection getLatest() { return RECENT.peekFirst(); }
+
+    public static double relativeBearingDegrees(Detection detection) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.player == null) return 0;
+        double dx = detection.x() - client.player.getX();
+        double dz = detection.z() - client.player.getZ();
+        double worldBearing = Math.toDegrees(Math.atan2(dx, dz));
+        return MathHelper.wrapDegrees(worldBearing + client.player.getYaw());
+    }
+
+    public static double horizontalDistance(Detection detection) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.player == null) return 0;
+        double dx = detection.x() - client.player.getX();
+        double dz = detection.z() - client.player.getZ();
+        return Math.sqrt(dx * dx + dz * dz);
+    }
     public static void clear() { RECENT.clear(); }
 
     public static String directionFromPlayer(Detection detection) {
