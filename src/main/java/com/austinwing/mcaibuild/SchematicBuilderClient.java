@@ -57,7 +57,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
     private static final int MAX_SKIP_PER_TICK = 64;
     private static final Path RECOVERY_FILE = SCHEMATIC_DIR.resolve("build-progress.properties");
 
-    private static KeyBinding loadKey, startKey, pauseKey, stopKey, slowerKey, fasterKey, materialsKey, dashboardKey, rotateKey, layerModeKey, layerUpKey, layerDownKey, ghostKey;
+    private static KeyBinding loadKey, startKey, pauseKey, stopKey, slowerKey, fasterKey, materialsKey, dashboardKey, rotateKey, layerModeKey, layerUpKey, layerDownKey, ghostKey, detectorKey;
     private static SchematicData schematic;
     private static BlockPos origin;
     private static int index, delayTicks = 6, waitTicks, placed, skipped;
@@ -85,6 +85,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
         layerUpKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.layer_up", GLFW.GLFW_KEY_PAGE_UP, category));
         layerDownKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.layer_down", GLFW.GLFW_KEY_PAGE_DOWN, category));
         ghostKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.ghost_preview", GLFW.GLFW_KEY_G, category));
+        detectorKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.redstone_detector", GLFW.GLFW_KEY_O, category));
         ClientTickEvents.END_CLIENT_TICK.register(SchematicBuilderClient::tick);
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
                 dispatcher.register(ClientCommandManager.literal("aibuild")
@@ -155,6 +156,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
             tell(client, "Build delay: " + delayTicks + " ticks per block.");
         }
         if (materialsKey.wasPressed() && client.currentScreen == null) openMaterials();
+        if (detectorKey.wasPressed() && client.currentScreen == null) openRedstoneDetector();
         if (dashboardKey.wasPressed() && client.currentScreen == null) client.setScreen(new BuildDashboardScreen());
         if (rotateKey.wasPressed()) { rotation = (rotation + 1) % 4; tell(client, "Schematic rotation: " + (rotation * 90) + " degrees."); }
         if (layerModeKey.wasPressed()) { layerMode = !layerMode; tell(client, "Layer-by-layer mode " + (layerMode ? "enabled" : "disabled") + "."); }
@@ -622,6 +624,11 @@ public final class SchematicBuilderClient implements ClientModInitializer {
                 addStackAndShulkerContents(nested, counts, depth + 1);
             }
         }
+    }
+
+    public static void openRedstoneDetector() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.currentScreen == null) client.setScreen(new RedstoneDetectorScreen());
     }
 
     public static void openMaterials() {
