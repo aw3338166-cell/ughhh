@@ -7,5 +7,6 @@
   ],
   "injectors": {
     "defaultRequire": 1
-  }
+  },
+  "refmap": "minecraft_ai_build-refmap.json"
 }
