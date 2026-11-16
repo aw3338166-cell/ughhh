@@ -55,6 +55,7 @@ public final class WorldIntelScreen extends Screen {
 
         addDrawableChild(ButtonWidget.builder(Text.literal("Scan nearby"), b -> {
             BaseFinderScanner.start(MinecraftClient.getInstance(), radius);
+            selectedCandidate = -1;
             refreshScreen();
         }).dimensions(x, buttonY, buttonWidth, 20).build());
 
@@ -254,8 +255,13 @@ public final class WorldIntelScreen extends Screen {
                     infoX, detailY + 36, 0xFFE5EDF5);
             context.drawTextWithShadow(textRenderer, "Chunk " + c.chunkX() + ", " + c.chunkZ(),
                     infoX, detailY + 54, 0xFFB8C7D9);
-            context.drawTextWithShadow(textRenderer, c.evidence(),
+            context.drawTextWithShadow(textRenderer, "Storage " + c.containers() + "  Workstations " + c.workstations(),
                     infoX, detailY + 72, 0xFFB8C7D9);
+            context.drawTextWithShadow(textRenderer, "Redstone " + c.redstone() + "  Doors " + c.doors(),
+                    infoX, detailY + 86, 0xFFB8C7D9);
+            context.drawTextWithShadow(textRenderer, "Crops " + c.crops() + "  Lights " + c.lighting()
+                    + (c.underground() ? "  Underground" : ""),
+                    infoX, detailY + 100, 0xFFB8C7D9);
         } else {
             context.drawTextWithShadow(textRenderer, "Candidates: " + results.size(),
                     infoX, radarMapY + 112, 0xFFE5EDF5);
