@@ -17,9 +17,11 @@ import java.util.Comparator;
 import java.util.List;
 
 public final class WorldIntelScreen extends Screen {
-    private enum Tab { BASES, CHUNKS }
+    private enum Tab { BASES, CHUNKS, RADAR }
     private static Tab tab = Tab.BASES;
     private static int radius = 2;
+    private int selectedCandidate = -1;
+    private int radarMapX, radarMapY, radarCell, radarRadius;
 
     public WorldIntelScreen() {
         super(Text.literal("World Intel"));
@@ -45,6 +47,11 @@ public final class WorldIntelScreen extends Screen {
             tab = Tab.CHUNKS;
             refreshScreen();
         }).dimensions(x + 118, top + 68, 112, 20).build());
+
+        addDrawableChild(ButtonWidget.builder(Text.literal("Base Radar"), b -> {
+            tab = Tab.RADAR;
+            refreshScreen();
+        }).dimensions(x + 236, top + 68, 112, 20).build());
 
         addDrawableChild(ButtonWidget.builder(Text.literal("Scan nearby"), b -> {
             BaseFinderScanner.start(MinecraftClient.getInstance(), radius);
@@ -83,9 +90,12 @@ public final class WorldIntelScreen extends Screen {
                 tab == Tab.BASES ? 0xFF28506B : 0xFF202B38);
         context.fill(left + 130, top + 64, left + 242, top + 90,
                 tab == Tab.CHUNKS ? 0xFF28506B : 0xFF202B38);
+        context.fill(left + 248, top + 64, left + 360, top + 90,
+                tab == Tab.RADAR ? 0xFF28506B : 0xFF202B38);
 
         if (tab == Tab.BASES) renderBases(context, left, top, panelWidth, panelHeight);
-        else renderChunks(context, left, top, panelWidth, panelHeight);
+        else if (tab == Tab.CHUNKS) renderChunks(context, left, top, panelWidth, panelHeight);
+        else renderRadar(context, left, top, panelWidth, panelHeight);
 
         super.render(context, mouseX, mouseY, delta);
     }
@@ -173,6 +183,111 @@ public final class WorldIntelScreen extends Screen {
         context.drawTextWithShadow(textRenderer,
                 "Plant growth stages are counted as clues only; they cannot prove past chunk loading.",
                 left + 16, top + panelHeight - 52, 0xFF8999AA);
+    }
+
+    private void renderRadar(DrawContext context, int left, int top, int panelWidth, int panelHeight) {
+        context.drawTextWithShadow(textRenderer, "DETECTED CANDIDATE RADAR",
+                left + 16, top + 104, 0xFF75E0A1);
+        context.drawTextWithShadow(textRenderer,
+                "Scan origin chunk: " + BaseFinderScanner.scanCenterX() + ", " + BaseFinderScanner.scanCenterZ()
+                        + "  •  Radius: " + BaseFinderScanner.scanRadius(),
+                left + 16, top + 122, 0xFFB8C7D9);
+
+        radarRadius = BaseFinderScanner.scanRadius();
+        radarCell = 30;
+        radarMapX = left + 22;
+        radarMapY = top + 158;
+        int diameter = radarRadius * 2 + 1;
+        List<BaseFinderScanner.Candidate> results = BaseFinderScanner.candidates();
+
+        for (int dx = -radarRadius; dx <= radarRadius; dx++) {
+            for (int dz = -radarRadius; dz <= radarRadius; dz++) {
+                int x = radarMapX + (dx + radarRadius) * radarCell;
+                int y = radarMapY + (dz + radarRadius) * radarCell;
+                int chunkX = BaseFinderScanner.scanCenterX() + dx;
+                int chunkZ = BaseFinderScanner.scanCenterZ() + dz;
+                boolean loaded = MinecraftClient.getInstance().world != null
+                        && MinecraftClient.getInstance().world.getChunkManager().isChunkLoaded(chunkX, chunkZ);
+                int color = loaded ? 0xFF263B4B : 0xFF202B38;
+                int candidateIndex = -1;
+                for (int i = 0; i < results.size(); i++) {
+                    BaseFinderScanner.Candidate c = results.get(i);
+                    if (c.chunkX() == chunkX && c.chunkZ() == chunkZ) {
+                        candidateIndex = i;
+                        color = c.score() >= 18 ? 0xFFB94E55 : c.score() >= 10 ? 0xFFB58A3E : 0xFF547D9A;
+                        break;
+                    }
+                }
+                context.fill(x, y, x + radarCell - 3, y + radarCell - 3, color);
+                if (candidateIndex == selectedCandidate) {
+                    context.fill(x + 2, y + 2, x + radarCell - 5, y + radarCell - 5, 0xFFFFFFFF);
+                } else if (dx == 0 && dz == 0) {
+                    context.fill(x + 9, y + 9, x + radarCell - 12, y + radarCell - 12, 0xFF65D6FF);
+                }
+                if (candidateIndex >= 0) {
+                    context.drawTextWithShadow(textRenderer, Integer.toString(candidateIndex + 1),
+                            x + 10, y + 10, 0xFFFFFFFF);
+                }
+            }
+        }
+
+        int infoX = radarMapX + diameter * radarCell + 22;
+        context.drawTextWithShadow(textRenderer, "LEGEND", infoX, radarMapY, 0xFFE5EDF5);
+        context.fill(infoX, radarMapY + 20, infoX + 12, radarMapY + 32, 0xFFB94E55);
+        context.drawTextWithShadow(textRenderer, "High", infoX + 18, radarMapY + 21, 0xFFB8C7D9);
+        context.fill(infoX, radarMapY + 40, infoX + 12, radarMapY + 52, 0xFFB58A3E);
+        context.drawTextWithShadow(textRenderer, "Medium", infoX + 18, radarMapY + 41, 0xFFB8C7D9);
+        context.fill(infoX, radarMapY + 60, infoX + 12, radarMapY + 72, 0xFF547D9A);
+        context.drawTextWithShadow(textRenderer, "Low", infoX + 18, radarMapY + 61, 0xFFB8C7D9);
+        context.fill(infoX, radarMapY + 80, infoX + 12, radarMapY + 92, 0xFF263B4B);
+        context.drawTextWithShadow(textRenderer, "Loaded", infoX + 18, radarMapY + 81, 0xFFB8C7D9);
+
+        if (selectedCandidate >= 0 && selectedCandidate < results.size()) {
+            BaseFinderScanner.Candidate c = results.get(selectedCandidate);
+            int detailY = radarMapY + 112;
+            context.drawTextWithShadow(textRenderer, "SELECTED #" + (selectedCandidate + 1),
+                    infoX, detailY, 0xFF75E0A1);
+            context.drawTextWithShadow(textRenderer, c.confidence() + " score " + c.score(),
+                    infoX, detailY + 18, 0xFFFFC66D);
+            context.drawTextWithShadow(textRenderer, "X " + ((c.chunkX() << 4) + 8)
+                    + "  Y " + c.y() + "  Z " + ((c.chunkZ() << 4) + 8),
+                    infoX, detailY + 36, 0xFFE5EDF5);
+            context.drawTextWithShadow(textRenderer, "Chunk " + c.chunkX() + ", " + c.chunkZ(),
+                    infoX, detailY + 54, 0xFFB8C7D9);
+            context.drawTextWithShadow(textRenderer, c.evidence(),
+                    infoX, detailY + 72, 0xFFB8C7D9);
+        } else {
+            context.drawTextWithShadow(textRenderer, "Candidates: " + results.size(),
+                    infoX, radarMapY + 112, 0xFFE5EDF5);
+            context.drawTextWithShadow(textRenderer, "Click a colored", infoX, radarMapY + 132, 0xFFB8C7D9);
+            context.drawTextWithShadow(textRenderer, "chunk to inspect it.", infoX, radarMapY + 146, 0xFFB8C7D9);
+        }
+
+        context.drawTextWithShadow(textRenderer, "Click a numbered marker to select its evidence.",
+                left + 16, top + panelHeight - 52, 0xFF8999AA);
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (tab == Tab.RADAR && button == 0 && radarCell > 0) {
+            List<BaseFinderScanner.Candidate> results = BaseFinderScanner.candidates();
+            int dx = (int) ((mouseX - radarMapX) / radarCell) - radarRadius;
+            int dz = (int) ((mouseY - radarMapY) / radarCell) - radarRadius;
+            if (mouseX >= radarMapX && mouseY >= radarMapY
+                    && dx >= -radarRadius && dx <= radarRadius
+                    && dz >= -radarRadius && dz <= radarRadius) {
+                int chunkX = BaseFinderScanner.scanCenterX() + dx;
+                int chunkZ = BaseFinderScanner.scanCenterZ() + dz;
+                for (int i = 0; i < results.size(); i++) {
+                    BaseFinderScanner.Candidate c = results.get(i);
+                    if (c.chunkX() == chunkX && c.chunkZ() == chunkZ) {
+                        selectedCandidate = i;
+                        return true;
+                    }
+                }
+            }
+        }
+        return super.mouseClicked(mouseX, mouseY, button);
     }
 
     @Override
