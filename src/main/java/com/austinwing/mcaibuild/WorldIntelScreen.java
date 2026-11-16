@@ -114,8 +114,9 @@ public final class WorldIntelScreen extends Screen {
                         i % 2 == 0 ? 0xFF202B38 : 0xFF1B2530);
                 String confidence = c.confidence();
                 context.drawTextWithShadow(textRenderer,
-                        confidence + "  Chunk " + c.chunkX() + ", " + c.chunkZ()
-                                + "  •  approx Y " + c.y(),
+                        confidence + " (" + c.score() + ")  Chunk " + c.chunkX() + ", " + c.chunkZ()
+                                + "  •  approx X " + ((c.chunkX() << 4) + 8)
+                                + " Z " + ((c.chunkZ() << 4) + 8) + " Y " + c.y(),
                         left + 24, y + 5, c.score() >= 16 ? 0xFF75E0A1 : 0xFFFFC66D);
                 context.drawTextWithShadow(textRenderer,
                         c.evidence(),
