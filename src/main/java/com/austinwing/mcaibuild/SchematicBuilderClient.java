@@ -153,6 +153,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
             stopWalking(client);
             return;
         }
+        BaseFinderScanner.tick(client);
         String dimension = client.world.getRegistryKey().getValue().toString();
         if (activeDimension == null) activeDimension = dimension;
         else if (!activeDimension.equals(dimension)) {
