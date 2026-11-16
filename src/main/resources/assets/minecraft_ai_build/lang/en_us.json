@@ -11,5 +11,6 @@
   "key.minecraft_ai_build.rotate": "Rotate schematic 90 degrees",
   "key.minecraft_ai_build.layer_mode": "Toggle layer-by-layer building",
   "key.minecraft_ai_build.layer_up": "Select next build layer",
-  "key.minecraft_ai_build.layer_down": "Select previous build layer"
+  "key.minecraft_ai_build.layer_down": "Select previous build layer",
+  "key.minecraft_ai_build.world_intel": "Open World Intel base and chunk viewer"
 }
