@@ -12,5 +12,8 @@
   "key.minecraft_ai_build.layer_mode": "Toggle layer-by-layer building",
   "key.minecraft_ai_build.layer_up": "Select next build layer",
   "key.minecraft_ai_build.layer_down": "Select previous build layer",
-  "key.minecraft_ai_build.world_intel": "Open World Intel base and chunk viewer"
+  "key.minecraft_ai_build.world_intel": "Open World Intel base and chunk viewer",
+  "key.minecraft_ai_build.ghost_preview": "Toggle blueprint ghost preview",
+  "key.minecraft_ai_build.redstone_detector": "Open redstone sound detector",
+  "key.minecraft_ai_build.snake_order": "Toggle snake build order"
 }
