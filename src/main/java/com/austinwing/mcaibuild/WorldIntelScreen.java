@@ -47,29 +47,29 @@ public final class WorldIntelScreen extends Screen {
 
         addDrawableChild(ButtonWidget.builder(Text.literal("Base Finder"), b -> {
             tab = Tab.BASES;
-            clearAndInit();
+            refreshScreen();
         }).dimensions(x, top + 68, 112, 20).build());
 
         addDrawableChild(ButtonWidget.builder(Text.literal("Chunk Viewer"), b -> {
             tab = Tab.CHUNKS;
-            clearAndInit();
+            refreshScreen();
         }).dimensions(x + 118, top + 68, 112, 20).build());
 
         addDrawableChild(ButtonWidget.builder(Text.literal("Scan nearby"), b -> {
             scanNearby();
-            clearAndInit();
+            refreshScreen();
         }).dimensions(x, buttonY, buttonWidth, 20).build());
 
         addDrawableChild(ButtonWidget.builder(Text.literal("Radius: " + radius + " chunks"), b -> {
             radius = radius == 3 ? 1 : radius + 1;
-            clearAndInit();
+            refreshScreen();
         }).dimensions(x + buttonWidth + gap, buttonY, buttonWidth, 20).build());
 
         addDrawableChild(ButtonWidget.builder(Text.literal("Close"), b -> close())
                 .dimensions(x + (buttonWidth + gap) * 2, buttonY, buttonWidth, 20).build());
     }
 
-    private void clearAndInit() {
+    private void refreshScreen() {
         clearChildren();
         init();
     }
@@ -84,7 +84,7 @@ public final class WorldIntelScreen extends Screen {
         int centerX = client.player.getBlockX() >> 4;
         int centerZ = client.player.getBlockZ() >> 4;
         int bottomY = client.world.getBottomY();
-        int topY = client.world.getTopY();
+        int topY = client.world.getBottomY() + client.world.getHeight();
         int seaLevel = client.world.getSeaLevel();
         int checked = 0;
         int plantClues = 0;
