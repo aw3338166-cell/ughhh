@@ -28,8 +28,10 @@ public final class RedstoneSoundDetector {
         double dz = z - client.player.getZ();
         if (dx * dx + dy * dy + dz * dz > getRange() * getRange()) return;
 
-        RECENT.addFirst(new Detection(soundId, x, y, z, System.currentTimeMillis()));
-        while (RECENT.size() > MAX_HISTORY) RECENT.removeLast();
+        synchronized (RECENT) {
+            RECENT.addFirst(new Detection(soundId, x, y, z, System.currentTimeMillis()));
+            while (RECENT.size() > MAX_HISTORY) RECENT.removeLast();
+        }
     }
 
     private static boolean isRedstoneRelated(String id) {
@@ -50,8 +52,8 @@ public final class RedstoneSoundDetector {
     public static void toggleEnabled() { enabled = !enabled; }
     public static int getRange() { return RANGES[rangeIndex]; }
     public static void cycleRange() { rangeIndex = (rangeIndex + 1) % RANGES.length; }
-    public static List<Detection> getRecent() { return new ArrayList<>(RECENT); }
-    public static Detection getLatest() { return RECENT.peekFirst(); }
+    public static List<Detection> getRecent() { synchronized (RECENT) { return new ArrayList<>(RECENT); } }
+    public static Detection getLatest() { synchronized (RECENT) { return RECENT.peekFirst(); } }
 
     public static double relativeBearingDegrees(Detection detection) {
         MinecraftClient client = MinecraftClient.getInstance();
@@ -59,7 +61,7 @@ public final class RedstoneSoundDetector {
         double dx = detection.x() - client.player.getX();
         double dz = detection.z() - client.player.getZ();
         double worldBearing = Math.toDegrees(Math.atan2(dx, dz));
-        return MathHelper.wrapDegrees(worldBearing + client.player.getYaw());
+        return MathHelper.wrapDegrees(-(worldBearing + client.player.getYaw()));
     }
 
     public static double horizontalDistance(Detection detection) {
@@ -69,7 +71,7 @@ public final class RedstoneSoundDetector {
         double dz = detection.z() - client.player.getZ();
         return Math.sqrt(dx * dx + dz * dz);
     }
-    public static void clear() { RECENT.clear(); }
+    public static void clear() { synchronized (RECENT) { RECENT.clear(); } }
 
     public static String directionFromPlayer(Detection detection) {
         MinecraftClient client = MinecraftClient.getInstance();
