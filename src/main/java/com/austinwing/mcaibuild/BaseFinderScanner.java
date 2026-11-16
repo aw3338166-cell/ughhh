@@ -219,6 +219,14 @@ public final class BaseFinderScanner {
                 || id.equals("pearlescent_froglight");
     }
 
+    public static void stop() {
+        scanning = false;
+        queue.clear();
+        queueIndex = 0;
+        totalBlocks = processedBlocks = 0;
+        message = "Scan stopped. Run a new scan when ready.";
+    }
+
     public static boolean isScanning() { return scanning; }
     public static String message() { return message; }
     public static int scannedChunks() { return scannedChunks; }
