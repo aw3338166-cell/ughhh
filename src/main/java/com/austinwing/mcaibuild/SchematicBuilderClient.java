@@ -2,6 +2,7 @@ package com.austinwing.mcaibuild;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
@@ -57,12 +58,15 @@ public final class SchematicBuilderClient implements ClientModInitializer {
     private static final int MAX_SKIP_PER_TICK = 64;
     private static final Path RECOVERY_FILE = SCHEMATIC_DIR.resolve("build-progress.properties");
 
-    private static KeyBinding loadKey, startKey, pauseKey, stopKey, slowerKey, fasterKey, materialsKey, dashboardKey, rotateKey, layerModeKey, layerUpKey, layerDownKey, ghostKey, detectorKey, worldIntelKey;
+    private static KeyBinding loadKey, startKey, pauseKey, stopKey, slowerKey, fasterKey, materialsKey, dashboardKey, rotateKey, layerModeKey, layerUpKey, layerDownKey, ghostKey, detectorKey, worldIntelKey, snakeOrderKey;
     private static SchematicData schematic;
     private static BlockPos origin;
     private static int index, delayTicks = 6, waitTicks, placed, skipped;
     private static boolean running, paused, layerMode, ghostPreview = true;
     private static int rotation, selectedLayer;
+    private static boolean snakeOrder;
+    private static List<Integer> activeOrder = List.of();
+    private static String activeDimension;
     private static BlockPos walkingForTarget;
     private static int walkingTicks;
     private static final int MAX_WALK_TICKS = 240;
@@ -87,7 +91,15 @@ public final class SchematicBuilderClient implements ClientModInitializer {
         ghostKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.ghost_preview", GLFW.GLFW_KEY_G, category));
         detectorKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.redstone_detector", GLFW.GLFW_KEY_O, category));
         worldIntelKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.world_intel", GLFW.GLFW_KEY_P, category));
+        snakeOrderKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.snake_order", GLFW.GLFW_KEY_B, category));
         ClientTickEvents.END_CLIENT_TICK.register(SchematicBuilderClient::tick);
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            running = false;
+            paused = false;
+            activeDimension = null;
+            stopWalking(client);
+            RedstoneSoundDetector.clear();
+        });
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
                 dispatcher.register(ClientCommandManager.literal("aibuild")
                         .then(ClientCommandManager.literal("load").executes(context -> {
@@ -134,7 +146,22 @@ public final class SchematicBuilderClient implements ClientModInitializer {
     }
 
     private static void tick(MinecraftClient client) {
-        if (client.player == null || client.world == null) return;
+        if (client.player == null || client.world == null) {
+            running = false;
+            paused = false;
+            activeDimension = null;
+            stopWalking(client);
+            return;
+        }
+        String dimension = client.world.getRegistryKey().getValue().toString();
+        if (activeDimension == null) activeDimension = dimension;
+        else if (!activeDimension.equals(dimension)) {
+            running = false;
+            paused = false;
+            activeDimension = dimension;
+            stopWalking(client);
+            tell(client, "Dimension changed. Builder stopped; saved progress was preserved.");
+        }
         if (loadKey.wasPressed()) loadLatest(client);
         if (startKey.wasPressed()) start(client);
         if (pauseKey.wasPressed() && running) {
@@ -163,6 +190,10 @@ public final class SchematicBuilderClient implements ClientModInitializer {
         if (rotateKey.wasPressed()) { rotation = (rotation + 1) % 4; tell(client, "Schematic rotation: " + (rotation * 90) + " degrees."); }
         if (layerModeKey.wasPressed()) { layerMode = !layerMode; tell(client, "Layer-by-layer mode " + (layerMode ? "enabled" : "disabled") + "."); }
         if (ghostKey.wasPressed()) { ghostPreview = !ghostPreview; tell(client, "Ghost preview " + (ghostPreview ? "enabled (transparent textured blocks)" : "disabled (solid textured blocks)") + "."); }
+        if (snakeOrderKey.wasPressed()) {
+            if (running) tell(client, "Stop or pause the build before changing its order.");
+            else { snakeOrder = !snakeOrder; rebuildOrder(); tell(client, "Snake build order " + (snakeOrder ? "enabled" : "disabled") + "."); }
+        }
         if (schematic != null && layerUpKey.wasPressed()) { selectedLayer = Math.min(schematic.height() - 1, selectedLayer + 1); tell(client, "Selected layer: " + selectedLayer + " / " + (schematic.height() - 1)); }
         if (schematic != null && layerDownKey.wasPressed()) { selectedLayer = Math.max(0, selectedLayer - 1); tell(client, "Selected layer: " + selectedLayer + " / " + (schematic.height() - 1)); }
         if (client.currentScreen != null) { stopWalking(client); return; }
@@ -195,7 +226,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
             origin = client.player.getBlockPos().offset(client.player.getHorizontalFacing(), 3);
             index = placed = skipped = 0;
             running = paused = false;
-            clearRecovery();
+            rebuildOrder();
             tell(client, "Loaded " + schematic.name() + " — " + schematic.width() + "x" +
                     schematic.height() + "x" + schematic.length() + ", " + schematic.blocks().size() +
                     " non-air blocks. F7 starts; F6 reloads.");
@@ -216,8 +247,13 @@ public final class SchematicBuilderClient implements ClientModInitializer {
             return;
         }
         if (!restoreRecovery(client)) {
+            if (hasRecoveryForSchematic()) {
+                tell(client, "Saved progress belongs to a different dimension. Return to its original dimension to resume, or use Repair to start a fresh pass.");
+                return;
+            }
             if (origin == null) origin = client.player.getBlockPos().offset(client.player.getHorizontalFacing(), 3);
             index = placed = skipped = 0;
+            rebuildOrder();
         }
         waitTicks = 0;
         paused = false;
@@ -228,9 +264,10 @@ public final class SchematicBuilderClient implements ClientModInitializer {
 
     private static void placeNext(MinecraftClient client) {
         List<SchematicData.BlockEntry> blocks = schematic.blocks();
+        if (activeOrder.size() != blocks.size()) rebuildOrder();
         int examined = 0;
-        while (index < blocks.size() && examined++ < MAX_SKIP_PER_TICK) {
-            SchematicData.BlockEntry entry = blocks.get(index);
+        while (index < activeOrder.size() && examined++ < MAX_SKIP_PER_TICK) {
+            SchematicData.BlockEntry entry = blocks.get(activeOrder.get(index));
             if (layerMode && entry.y() != selectedLayer) { index++; continue; }
             BlockPos target = origin.add(rotatedX(entry), entry.y(), rotatedZ(entry));
             Block block = Registries.BLOCK.get(Identifier.of(entry.blockId()));
@@ -302,7 +339,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
             return;
         }
 
-        if (index >= blocks.size()) {
+        if (index >= activeOrder.size()) {
             running = false;
             stopWalking(client);
             clearRecovery();
@@ -728,6 +765,11 @@ public final class SchematicBuilderClient implements ClientModInitializer {
             data.setProperty("index", Integer.toString(index));
             data.setProperty("placed", Integer.toString(placed));
             data.setProperty("skipped", Integer.toString(skipped));
+            data.setProperty("dimension", MinecraftClient.getInstance().world == null ? "" : MinecraftClient.getInstance().world.getRegistryKey().getValue().toString());
+            data.setProperty("rotation", Integer.toString(rotation));
+            data.setProperty("layerMode", Boolean.toString(layerMode));
+            data.setProperty("selectedLayer", Integer.toString(selectedLayer));
+            data.setProperty("snakeOrder", Boolean.toString(snakeOrder));
             try (OutputStream out = Files.newOutputStream(RECOVERY_FILE)) {
                 data.store(out, "Minecraft AI Build recovery state");
             }
@@ -742,6 +784,14 @@ public final class SchematicBuilderClient implements ClientModInitializer {
             Properties data = new Properties();
             data.load(in);
             if (!schematic.name().equals(data.getProperty("schematic"))) return false;
+            String savedDimension = data.getProperty("dimension", "");
+            if (!savedDimension.isEmpty() && client.world != null
+                    && !savedDimension.equals(client.world.getRegistryKey().getValue().toString())) return false;
+            rotation = Math.floorMod(Integer.parseInt(data.getProperty("rotation", "0")), 4);
+            layerMode = Boolean.parseBoolean(data.getProperty("layerMode", "false"));
+            selectedLayer = Math.max(0, Math.min(schematic.height() - 1, Integer.parseInt(data.getProperty("selectedLayer", "0"))));
+            snakeOrder = Boolean.parseBoolean(data.getProperty("snakeOrder", "false"));
+            rebuildOrder();
             origin = new BlockPos(Integer.parseInt(data.getProperty("x")),
                     Integer.parseInt(data.getProperty("y")), Integer.parseInt(data.getProperty("z")));
             index = Math.max(0, Math.min(schematic.blocks().size(), Integer.parseInt(data.getProperty("index"))));
@@ -753,6 +803,27 @@ public final class SchematicBuilderClient implements ClientModInitializer {
         } catch (Exception e) {
             MinecraftAIBuild.LOGGER.warn("Could not restore build recovery state", e);
             return false;
+        }
+    }
+
+    private static boolean hasRecoveryForSchematic() {
+        if (schematic == null || !Files.isRegularFile(RECOVERY_FILE)) return false;
+        try (InputStream in = Files.newInputStream(RECOVERY_FILE)) {
+            Properties data = new Properties();
+            data.load(in);
+            return schematic.name().equals(data.getProperty("schematic"));
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    private static void rebuildOrder() {
+        if (schematic == null) { activeOrder = List.of(); return; }
+        if (snakeOrder) activeOrder = SnakeBuilder.createOrder(schematic.blocks());
+        else {
+            List<Integer> natural = new ArrayList<>(schematic.blocks().size());
+            for (int i = 0; i < schematic.blocks().size(); i++) natural.add(i);
+            activeOrder = List.copyOf(natural);
         }
     }
 
