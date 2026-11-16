@@ -1,6 +1,7 @@
 package com.austinwing.mcaibuild;
 
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.world.ClientWorld;
 import net.minecraft.block.BlockState;
 import net.minecraft.registry.Registries;
 import net.minecraft.util.math.BlockPos;
@@ -58,6 +59,7 @@ public final class BaseFinderScanner {
     private static int totalBlocks;
     private static int processedBlocks;
     private static boolean scanning;
+    private static ClientWorld scanWorld;
     private static String message = "Scan nearby loaded chunks to find possible player-built areas.";
 
     private BaseFinderScanner() {}
@@ -65,6 +67,7 @@ public final class BaseFinderScanner {
     public static void start(MinecraftClient client, int radius) {
         queue.clear();
         candidates.clear();
+        scanWorld = client.world;
         queueIndex = scannedChunks = totalBlocks = processedBlocks = 0;
         if (client.player == null || client.world == null) {
             scanning = false;
@@ -98,9 +101,9 @@ public final class BaseFinderScanner {
     /** Call once per client tick. World access remains on the client thread. */
     public static void tick(MinecraftClient client) {
         if (!scanning) return;
-        if (client.world == null || client.player == null) {
+        if (client.world == null || client.player == null || client.world != scanWorld) {
             scanning = false;
-            message = "Scan stopped because the world was closed.";
+            message = "Scan stopped because the world or dimension changed.";
             return;
         }
 
