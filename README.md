@@ -36,3 +36,15 @@ Additional controls:\n\n- **M** opens the Materials list.\n- **H** opens the Bui
 - Test in a creative test world or a server where you have permission before using a valuable build.
 
 The builder uses normal player interactions. Server protections remain authoritative.
+
+## Base Finder / World Intel
+
+Open World Intel with **P** and choose **Base Finder**. Select a scan radius (1–3 chunks) and press **Scan nearby**.
+
+- Scans only chunks already loaded and available to the client; it does not request unloaded chunks or inspect server-only data.
+- Processes a limited number of block positions per client tick to avoid the old full-radius synchronous scan.
+- Scores candidate chunks using combinations of storage, workstations, redstone components, doors, crops, and lighting.
+- Displays approximate chunk-center coordinates, a Y estimate, evidence counts, and a heuristic confidence label.
+- Results are clues for authorized inspection, not proof that a player base is present. Villages, public builds, and natural/utility areas can produce false positives.
+
+The scanner reads world state on the client thread in small batches for API safety. It is incremental rather than a separate background thread.
