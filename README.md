@@ -22,7 +22,8 @@ A client-side schematic building assistant for Minecraft Java 1.21.11 / Fabric /
 7. Press **F7** to start.
 8. Press **F8** to pause/resume, **F9** to stop, **[** to slow down, and **]** to speed up.
 
-Additional controls:\n\n- **M** opens the Materials list.\n- **H** opens the Build Dashboard.\n- **R** rotates the schematic placement by 90 degrees (position rotation only).\n- **L** toggles layer-by-layer mode; **Page Up / Page Down** selects the layer.\n- Build progress is saved after successful placements and can be resumed with F7 after restarting, as long as the same schematic is loaded.\n\nRebind keys in Options → Controls → Key Binds → Minecraft AI Build.
+Additional controls:\n\n- **M** opens the Materials list.\n- **H** opens the Build Dashboard.\n- **R** rotates the schematic placement by 90 degrees (position rotation only).\n- **L** toggles layer-by-layer mode; **Page Up / Page Down** selects the layer.
+- **B** toggles the optional snake build order (alternating row direction); the original schematic order remains the default.\n- Build progress is saved after successful placements and can be resumed with F7 after restarting, as long as the same schematic and dimension are loaded. Recovery also stores placement rotation, layer settings, and build order.\n\nRebind keys in Options → Controls → Key Binds → Minecraft AI Build.
 
 ## Current limitations
 
