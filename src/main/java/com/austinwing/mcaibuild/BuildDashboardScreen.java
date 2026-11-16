@@ -12,7 +12,7 @@ public final class BuildDashboardScreen extends Screen {
     protected void init() {
         int panelWidth = Math.min(420, width - 24);
         int left = (width - panelWidth) / 2;
-        int top = height / 2 - 155;
+        int top = height / 2 - 170;
         int gap = 6;
         int buttonWidth = (panelWidth - 32 - gap) / 2;
         int x1 = left + 10, x2 = x1 + buttonWidth + gap, y = top + 106;
@@ -32,7 +32,8 @@ public final class BuildDashboardScreen extends Screen {
         addDrawableChild(ButtonWidget.builder(Text.literal("Toggle 3D preview"), b -> SchematicBuilderClient.dashboardTogglePreview()).dimensions(x1, y, buttonWidth, 20).build());
         y += 26;
         addDrawableChild(ButtonWidget.builder(Text.literal("Redstone detector"), b -> SchematicBuilderClient.openRedstoneDetector()).dimensions(x1, y, buttonWidth, 20).build());
-        addDrawableChild(ButtonWidget.builder(Text.literal("Close"), b -> close()).dimensions(x2, y, buttonWidth, 20).build());
+        addDrawableChild(ButtonWidget.builder(Text.literal("World Intel"), b -> SchematicBuilderClient.openWorldIntel()).dimensions(x1, y + 26, buttonWidth, 20).build());
+        addDrawableChild(ButtonWidget.builder(Text.literal("Close"), b -> close()).dimensions(x2, y + 26, buttonWidth, 20).build());
     }
 
     @Override
@@ -41,13 +42,13 @@ public final class BuildDashboardScreen extends Screen {
         int panelWidth = Math.min(420, width - 24);
         int left = (width - panelWidth) / 2;
         int top = height / 2 - 155;
-        context.fill(left, top, left + panelWidth, top + 310, 0xEE15191F);
+        context.fill(left, top, left + panelWidth, top + 340, 0xEE15191F);
         context.fill(left, top, left + panelWidth, top + 2, 0xFF55B7FF);
         context.drawCenteredTextWithShadow(textRenderer, "AI BUILD CONTROL CENTER", width / 2, top + 12, 0xFFFFFFFF);
         context.drawTextWithShadow(textRenderer, "Schematic: " + SchematicBuilderClient.dashboardSchematicName(), left + 14, top + 34, 0xFFE3EAF2);
         context.drawTextWithShadow(textRenderer, "Status: " + SchematicBuilderClient.dashboardStatus(), left + 14, top + 50, 0xFFB8C7D9);
         context.drawTextWithShadow(textRenderer, "Progress: " + SchematicBuilderClient.dashboardProgress(), left + 14, top + 66, 0xFFB8C7D9);
-        context.drawTextWithShadow(textRenderer, "F6 load | F7 start | F8 pause | F9 stop | M materials | O detector", left + 14, top + 84, 0xFF9FD5FF);
+        context.drawTextWithShadow(textRenderer, "F6 load | F7 start | F8 pause | F9 stop | M materials | O detector | P world intel", left + 14, top + 84, 0xFF9FD5FF);
         super.render(context, mouseX, mouseY, delta);
     }
 
