@@ -60,6 +60,9 @@ public final class BaseFinderScanner {
     private static int processedBlocks;
     private static boolean scanning;
     private static ClientWorld scanWorld;
+    private static int scanCenterX;
+    private static int scanCenterZ;
+    private static int scanRadius;
     private static String message = "Scan nearby loaded chunks to find possible player-built areas.";
 
     private BaseFinderScanner() {}
@@ -77,6 +80,10 @@ public final class BaseFinderScanner {
 
         int centerX = client.player.getBlockX() >> 4;
         int centerZ = client.player.getBlockZ() >> 4;
+        scanCenterX = centerX;
+        scanCenterZ = centerZ;
+        scanRadius = Math.max(1, Math.min(3, radius));
+        radius = scanRadius;
         int bottomY = client.world.getBottomY();
         int topY = bottomY + client.world.getHeight();
         int seaLevel = client.world.getSeaLevel();
@@ -218,4 +225,7 @@ public final class BaseFinderScanner {
     public static int totalChunks() { return queue.size(); }
     public static int progressPercent() { return totalBlocks == 0 ? 0 : processedBlocks * 100 / totalBlocks; }
     public static List<Candidate> candidates() { return List.copyOf(candidates); }
+    public static int scanCenterX() { return scanCenterX; }
+    public static int scanCenterZ() { return scanCenterZ; }
+    public static int scanRadius() { return scanRadius; }
 }
