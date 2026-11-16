@@ -94,6 +94,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
         snakeOrderKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.minecraft_ai_build.snake_order", GLFW.GLFW_KEY_B, category));
         ClientTickEvents.END_CLIENT_TICK.register(SchematicBuilderClient::tick);
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            BaseFinderScanner.stop();
             running = false;
             paused = false;
             activeDimension = null;
@@ -146,6 +147,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
     }
 
     private static void tick(MinecraftClient client) {
+        BaseFinderScanner.tick(client);
         if (client.player == null || client.world == null) {
             running = false;
             paused = false;
@@ -153,7 +155,6 @@ public final class SchematicBuilderClient implements ClientModInitializer {
             stopWalking(client);
             return;
         }
-        BaseFinderScanner.tick(client);
         String dimension = client.world.getRegistryKey().getValue().toString();
         if (activeDimension == null) activeDimension = dimension;
         else if (!activeDimension.equals(dimension)) {
