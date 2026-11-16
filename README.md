@@ -48,3 +48,10 @@ Open World Intel with **P** and choose **Base Finder**. Select a scan radius (1â
 - Results are clues for authorized inspection, not proof that a player base is present. Villages, public builds, and natural/utility areas can produce false positives.
 
 The scanner reads world state on the client thread in small batches for API safety. It is incremental rather than a separate background thread.
+
+
+### Base Radar
+
+World Intel now has a **Base Radar** tab. After a Base Finder scan completes, it plots candidate chunks inside the scan area on a clickable grid. Marker colors represent heuristic confidence (red/high, amber/medium, blue/low); the center marker identifies the scan-origin chunk. Selecting a candidate displays its approximate chunk-center coordinates and evidence counts.
+
+The radar displays the current scan's in-memory results. It is not a live view of unloaded terrain, and candidate results are not persisted between game sessions yet.
