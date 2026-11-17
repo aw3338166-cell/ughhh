@@ -16,8 +16,9 @@ public final class RedstoneDetectorScreen extends Screen {
     @Override
     protected void init() {
         int panelWidth = Math.min(500, width - 20);
-        int top = Math.max(10, (height - 400) / 2);
-        int buttonY = top + 364;
+        int panelHeight = Math.min(400, height - 20);
+        int top = (height - panelHeight) / 2;
+        int buttonY = top + panelHeight - 30;
         int gap = 6;
         int total = panelWidth - 24;
         int toggleWidth = total * 30 / 100;
@@ -90,7 +91,7 @@ public final class RedstoneDetectorScreen extends Screen {
                             RedstoneSoundDetector.horizontalDistance(latest)),
                     infoX, radarTop + 60, 0xFF9FC5E8);
             context.drawTextWithShadow(textRenderer,
-                    "Height difference: " + Math.round(latest.y() - MinecraftClient.getInstance().player.getY()) + " blocks",
+                    "Height difference: " + heightDifference(latest) + " blocks",
                     infoX, radarTop + 75, 0xFF9FC5E8);
             context.drawTextWithShadow(textRenderer,
                     "Heard " + RedstoneSoundDetector.ageLabel(latest),
@@ -129,8 +130,13 @@ public final class RedstoneDetectorScreen extends Screen {
 
         context.drawTextWithShadow(textRenderer,
                 "Sound-based only: inactive wiring and silent blocks cannot be detected.",
-                left + 14, top + panelHeight - 22, 0xFF8999AA);
+                left + 14, top + panelHeight - 44, 0xFF8999AA);
         super.render(context, mouseX, mouseY, delta);
+    }
+
+    private static String heightDifference(RedstoneSoundDetector.Detection detection) {
+        var player = MinecraftClient.getInstance().player;
+        return player == null ? "--" : Long.toString(Math.round(detection.y() - player.getY()));
     }
 
     private void drawRadar(DrawContext context, int left, int top,
