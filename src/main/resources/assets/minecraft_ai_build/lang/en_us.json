@@ -1,5 +1,6 @@
 {
   "key.category.minecraft_ai_build.builder": "Minecraft AI Build",
+  "key.category.minecraft_ai_build.selection": "Minecraft AI Build Selection",
   "key.minecraft_ai_build.load_preview": "Load latest schematic / preview summary",
   "key.minecraft_ai_build.start": "Start building",
   "key.minecraft_ai_build.pause": "Pause / resume building",
@@ -15,5 +16,8 @@
   "key.minecraft_ai_build.world_intel": "Open World Intel base and chunk viewer",
   "key.minecraft_ai_build.ghost_preview": "Toggle blueprint ghost preview",
   "key.minecraft_ai_build.redstone_detector": "Open redstone sound detector",
-  "key.minecraft_ai_build.snake_order": "Toggle snake build order"
+  "key.minecraft_ai_build.snake_order": "Toggle snake build order",
+  "key.minecraft_ai_build.selection_pos1": "Set selection corner 1",
+  "key.minecraft_ai_build.selection_pos2": "Set selection corner 2",
+  "key.minecraft_ai_build.selection_analyzer": "Open live selection analyzer"
 }
