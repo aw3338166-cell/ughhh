@@ -55,3 +55,8 @@ The scanner reads world state on the client thread in small batches for API safe
 World Intel now has a **Base Radar** tab. After a Base Finder scan completes, it plots candidate chunks inside the scan area on a clickable grid. Marker colors represent heuristic confidence (red/high, amber/medium, blue/low); the center marker identifies the scan-origin chunk. Selecting a candidate displays its approximate chunk-center coordinates and evidence counts.
 
 The radar displays the current scan's in-memory results. It is not a live view of unloaded terrain, and candidate results are not persisted between game sessions yet.
+
+
+## Automated tests
+
+The project includes JUnit 5 tests for Litematica bit unpacking, schematic transforms, material counts, and redstone bearing math. Run them with `gradle test`; the CI build runs the full `gradle build` task.
