@@ -1,5 +1,7 @@
 package com.austinwing.mcaibuild;
 
+import com.austinwing.mcaibuild.schematic.LitematicBitArray;
+
 import java.io.BufferedInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -113,12 +115,12 @@ public final class SchematicReader {
                     paletteProperties.add(Map.copyOf(props));
                 } else { paletteIds.add("minecraft:air"); paletteProperties.add(Map.of()); }
             }
-            int bits = Math.max(2, 32 - Integer.numberOfLeadingZeros(paletteIds.size() - 1));
+            int bits = LitematicBitArray.bitsFor(paletteIds.size());
             int volume = ax * ay * az;
             if (states.length == 0 && volume > 0) continue;
 
             for (int i = 0; i < volume; i++) {
-                int paletteIndex = readPacked(states, i, bits);
+                int paletteIndex = LitematicBitArray.get(states, i, bits);
                 if (paletteIndex < 0 || paletteIndex >= paletteIds.size()) continue;
                 String id = paletteIds.get(paletteIndex);
                 if (isAir(id)) continue;
@@ -156,17 +158,6 @@ public final class SchematicReader {
                 || path.contains("stairs") || path.contains("slab") || path.contains("fence")
                 || path.contains("pane") || path.contains("rail")) return 1;
         return 0;
-    }
-
-    /** Litematica packs floor(64 / bits) values into each long; values never straddle longs. */
-    private static int readPacked(long[] data, int index, int bits) {
-        int valuesPerLong = 64 / bits;
-        int word = index / valuesPerLong;
-        int slot = index % valuesPerLong;
-        if (word >= data.length) return -1;
-        int offset = slot * bits;
-        long mask = (1L << bits) - 1L;
-        return (int) ((data[word] >>> offset) & mask);
     }
 
     private static int readVarInt(byte[] bytes, int[] cursor) throws IOException {

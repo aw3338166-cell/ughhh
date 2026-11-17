@@ -1,6 +1,7 @@
 package com.austinwing.mcaibuild;
 
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -17,18 +18,11 @@ import java.util.Comparator;
 import java.util.List;
 
 public final class WorldIntelScreen extends Screen {
-    private enum Tab { BASES, CHUNKS }
+    private enum Tab { BASES, CHUNKS, RADAR }
     private static Tab tab = Tab.BASES;
     private static int radius = 2;
-    private static int scannedChunks;
-    private static int loadedChunks;
-    private static int grownPlantClues;
-    private static List<Candidate> candidates = new ArrayList<>();
-    private static String scanMessage = "Scan nearby loaded chunks to look for possible player-built areas.";
-
-    private record Candidate(int chunkX, int chunkZ, int y, int score,
-                             int containers, int workstations, int redstone,
-                             int doors, boolean underground) {}
+    private int selectedCandidate = -1;
+    private int radarMapX, radarMapY, radarCell, radarRadius;
 
     public WorldIntelScreen() {
         super(Text.literal("World Intel"));
@@ -55,8 +49,14 @@ public final class WorldIntelScreen extends Screen {
             refreshScreen();
         }).dimensions(x + 118, top + 68, 112, 20).build());
 
+        addDrawableChild(ButtonWidget.builder(Text.literal("Base Radar"), b -> {
+            tab = Tab.RADAR;
+            refreshScreen();
+        }).dimensions(x + 236, top + 68, 112, 20).build());
+
         addDrawableChild(ButtonWidget.builder(Text.literal("Scan nearby"), b -> {
-            scanNearby();
+            BaseFinderScanner.start(MinecraftClient.getInstance(), radius);
+            selectedCandidate = -1;
             refreshScreen();
         }).dimensions(x, buttonY, buttonWidth, 20).build());
 
@@ -72,135 +72,6 @@ public final class WorldIntelScreen extends Screen {
     private void refreshScreen() {
         clearChildren();
         init();
-    }
-
-    private static void scanNearby() {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.player == null || client.world == null) {
-            scanMessage = "Join a world before scanning.";
-            return;
-        }
-
-        int centerX = client.player.getBlockX() >> 4;
-        int centerZ = client.player.getBlockZ() >> 4;
-        int bottomY = client.world.getBottomY();
-        int topY = client.world.getBottomY() + client.world.getHeight();
-        int seaLevel = client.world.getSeaLevel();
-        int checked = 0;
-        int plantClues = 0;
-        List<Candidate> found = new ArrayList<>();
-
-        for (int cx = centerX - radius; cx <= centerX + radius; cx++) {
-            for (int cz = centerZ - radius; cz <= centerZ + radius; cz++) {
-                if (!client.world.getChunkManager().isChunkLoaded(cx, cz)) continue;
-                Chunk chunk = client.world.getChunkManager().getChunk(cx, cz, ChunkStatus.FULL, false);
-                if (chunk == null) continue;
-                checked++;
-
-                int containers = 0;
-                int workstations = 0;
-                int redstone = 0;
-                int doors = 0;
-                int lowestFeatureY = topY;
-                boolean underground = false;
-                BlockPos.Mutable pos = new BlockPos.Mutable();
-
-                for (int x = 0; x < 16; x++) {
-                    for (int z = 0; z < 16; z++) {
-                        for (int y = bottomY; y < topY; y++) {
-                            pos.set((cx << 4) + x, y, (cz << 4) + z);
-                            BlockState state = chunk.getBlockState(pos);
-                            if (state.isAir()) continue;
-                            String id = Registries.BLOCK.getId(state.getBlock()).getPath();
-
-                            if (isContainer(id)) {
-                                containers++;
-                                lowestFeatureY = Math.min(lowestFeatureY, y);
-                                if (y < seaLevel - 8) underground = true;
-                            }
-                            if (isWorkstation(id)) {
-                                workstations++;
-                                lowestFeatureY = Math.min(lowestFeatureY, y);
-                                if (y < seaLevel - 8) underground = true;
-                            }
-                            if (isRedstone(id)) {
-                                redstone++;
-                                lowestFeatureY = Math.min(lowestFeatureY, y);
-                                if (y < seaLevel - 8) underground = true;
-                            }
-                            if (id.endsWith("_door") || id.endsWith("_trapdoor")) {
-                                doors++;
-                                lowestFeatureY = Math.min(lowestFeatureY, y);
-                                if (y < seaLevel - 8) underground = true;
-                            }
-                            if (isCrop(id) && hasPositiveAge(state)) plantClues++;
-                        }
-                    }
-                }
-
-                int utilityCount = containers + workstations + redstone;
-                int score = containers * 3 + workstations * 2 + redstone * 2 + doors;
-                if (utilityCount >= 4) score += 2;
-                if (underground) score += 3;
-
-                if (score >= 6 && utilityCount >= 2) {
-                    int featureY = lowestFeatureY == topY ? seaLevel : lowestFeatureY;
-                    found.add(new Candidate(cx, cz, featureY, score, containers,
-                            workstations, redstone, doors, underground));
-                }
-            }
-        }
-
-        found.sort(Comparator.comparingInt(Candidate::score).reversed());
-        candidates = found;
-        scannedChunks = checked;
-        loadedChunks = client.world.getChunkManager().getLoadedChunkCount();
-        grownPlantClues = plantClues;
-        scanMessage = "Scanned " + checked + " loaded chunks. Results only include data sent to your client.";
-    }
-
-    private static boolean isContainer(String id) {
-        return id.equals("chest") || id.equals("trapped_chest") || id.equals("barrel")
-                || id.endsWith("_shulker_box") || id.equals("hopper");
-    }
-
-    private static boolean isWorkstation(String id) {
-        return id.equals("crafting_table") || id.equals("furnace") || id.equals("smoker")
-                || id.equals("blast_furnace") || id.equals("enchanting_table")
-                || id.equals("brewing_stand") || id.equals("smithing_table")
-                || id.equals("loom") || id.equals("cartography_table")
-                || id.equals("stonecutter") || id.equals("grindstone")
-                || id.equals("lectern") || id.endsWith("_anvil");
-    }
-
-    private static boolean isRedstone(String id) {
-        return id.contains("redstone") || id.contains("piston") || id.contains("observer")
-                || id.contains("repeater") || id.contains("comparator")
-                || id.equals("lever") || id.endsWith("_button")
-                || id.equals("tripwire_hook") || id.equals("target")
-                || id.equals("daylight_detector") || id.equals("dispenser")
-                || id.equals("dropper");
-    }
-
-    private static boolean isCrop(String id) {
-        return id.equals("wheat") || id.equals("carrots") || id.equals("potatoes")
-                || id.equals("beetroots") || id.equals("nether_wart")
-                || id.equals("cocoa") || id.equals("sweet_berry_bush")
-                || id.equals("melon_stem") || id.equals("pumpkin_stem");
-    }
-
-    @SuppressWarnings({"rawtypes", "unchecked"})
-    private static boolean hasPositiveAge(BlockState state) {
-        for (Property property : state.getProperties()) {
-            if (!property.getName().equals("age")) continue;
-            Object value = state.get(property);
-            try {
-                return Integer.parseInt(String.valueOf(value)) > 0;
-            } catch (NumberFormatException ignored) {
-                return false;
-            }
-        }
-        return false;
     }
 
     @Override
@@ -221,9 +92,12 @@ public final class WorldIntelScreen extends Screen {
                 tab == Tab.BASES ? 0xFF28506B : 0xFF202B38);
         context.fill(left + 130, top + 64, left + 242, top + 90,
                 tab == Tab.CHUNKS ? 0xFF28506B : 0xFF202B38);
+        context.fill(left + 248, top + 64, left + 360, top + 90,
+                tab == Tab.RADAR ? 0xFF28506B : 0xFF202B38);
 
         if (tab == Tab.BASES) renderBases(context, left, top, panelWidth, panelHeight);
-        else renderChunks(context, left, top, panelWidth, panelHeight);
+        else if (tab == Tab.CHUNKS) renderChunks(context, left, top, panelWidth, panelHeight);
+        else renderRadar(context, left, top, panelWidth, panelHeight);
 
         super.render(context, mouseX, mouseY, delta);
     }
@@ -231,34 +105,33 @@ public final class WorldIntelScreen extends Screen {
     private void renderBases(DrawContext context, int left, int top, int panelWidth, int panelHeight) {
         context.drawTextWithShadow(textRenderer, "POSSIBLE PLAYER-BUILT AREAS",
                 left + 16, top + 104, 0xFF75E0A1);
-        context.drawTextWithShadow(textRenderer, scanMessage, left + 16, top + 122, 0xFFB8C7D9);
+        context.drawTextWithShadow(textRenderer, BaseFinderScanner.message(), left + 16, top + 122, 0xFFB8C7D9);
         context.drawTextWithShadow(textRenderer,
-                "Scanned chunks: " + scannedChunks + "   •   Growth clues: " + grownPlantClues,
+                "Scanned chunks: " + BaseFinderScanner.scannedChunks() + "/" + BaseFinderScanner.totalChunks() + "   •   Progress: " + BaseFinderScanner.progressPercent() + "%",
                 left + 16, top + 142, 0xFF9FC5E8);
 
         int rowY = top + 166;
-        if (candidates.isEmpty()) {
+        if (BaseFinderScanner.candidates().isEmpty()) {
             context.fill(left + 14, rowY, left + panelWidth - 14, rowY + 54, 0xFF202B38);
             context.drawTextWithShadow(textRenderer, "No strong candidates yet.",
                     left + 26, rowY + 12, 0xFFE5EDF5);
             context.drawTextWithShadow(textRenderer, "Try scanning while closer to the area.",
                     left + 26, rowY + 30, 0xFF9EADBD);
         } else {
-            int rows = Math.min(5, candidates.size());
+            int rows = Math.min(5, BaseFinderScanner.candidates().size());
             for (int i = 0; i < rows; i++) {
-                Candidate c = candidates.get(i);
+                BaseFinderScanner.Candidate c = BaseFinderScanner.candidates().get(i);
                 int y = rowY + i * 34;
                 context.fill(left + 14, y, left + panelWidth - 14, y + 29,
                         i % 2 == 0 ? 0xFF202B38 : 0xFF1B2530);
-                String confidence = c.score() >= 16 ? "HIGH" : c.score() >= 10 ? "MEDIUM" : "LOW";
+                String confidence = c.confidence();
                 context.drawTextWithShadow(textRenderer,
-                        confidence + "  Chunk " + c.chunkX() + ", " + c.chunkZ()
-                                + "  •  approx Y " + c.y(),
+                        confidence + " (" + c.score() + ")  Chunk " + c.chunkX() + ", " + c.chunkZ()
+                                + "  •  approx X " + ((c.chunkX() << 4) + 8)
+                                + " Z " + ((c.chunkZ() << 4) + 8) + " Y " + c.y(),
                         left + 24, y + 5, c.score() >= 16 ? 0xFF75E0A1 : 0xFFFFC66D);
                 context.drawTextWithShadow(textRenderer,
-                        "Storage " + c.containers() + "  Workstations " + c.workstations()
-                                + "  Redstone " + c.redstone() + "  Doors " + c.doors()
-                                + (c.underground() ? "  •  underground" : ""),
+                        c.evidence(),
                         left + 24, y + 17, 0xFFB8C7D9);
             }
         }
@@ -312,6 +185,122 @@ public final class WorldIntelScreen extends Screen {
         context.drawTextWithShadow(textRenderer,
                 "Plant growth stages are counted as clues only; they cannot prove past chunk loading.",
                 left + 16, top + panelHeight - 52, 0xFF8999AA);
+    }
+
+    private void renderRadar(DrawContext context, int left, int top, int panelWidth, int panelHeight) {
+        context.drawTextWithShadow(textRenderer, "DETECTED CANDIDATE RADAR",
+                left + 16, top + 104, 0xFF75E0A1);
+        context.drawTextWithShadow(textRenderer,
+                "Scan origin chunk: " + BaseFinderScanner.scanCenterX() + ", " + BaseFinderScanner.scanCenterZ()
+                        + "  •  Radius: " + BaseFinderScanner.scanRadius(),
+                left + 16, top + 122, 0xFFB8C7D9);
+
+        radarRadius = BaseFinderScanner.scanRadius();
+        radarCell = 30;
+        radarMapX = left + 22;
+        radarMapY = top + 158;
+        int diameter = radarRadius * 2 + 1;
+        List<BaseFinderScanner.Candidate> results = BaseFinderScanner.candidates();
+
+        for (int dx = -radarRadius; dx <= radarRadius; dx++) {
+            for (int dz = -radarRadius; dz <= radarRadius; dz++) {
+                int x = radarMapX + (dx + radarRadius) * radarCell;
+                int y = radarMapY + (dz + radarRadius) * radarCell;
+                int chunkX = BaseFinderScanner.scanCenterX() + dx;
+                int chunkZ = BaseFinderScanner.scanCenterZ() + dz;
+                boolean loaded = MinecraftClient.getInstance().world != null
+                        && MinecraftClient.getInstance().world.getChunkManager().isChunkLoaded(chunkX, chunkZ);
+                int color = loaded ? 0xFF263B4B : 0xFF202B38;
+                int candidateIndex = -1;
+                for (int i = 0; i < results.size(); i++) {
+                    BaseFinderScanner.Candidate c = results.get(i);
+                    if (c.chunkX() == chunkX && c.chunkZ() == chunkZ) {
+                        candidateIndex = i;
+                        color = c.score() >= 18 ? 0xFFB94E55 : c.score() >= 10 ? 0xFFB58A3E : 0xFF547D9A;
+                        break;
+                    }
+                }
+                context.fill(x, y, x + radarCell - 3, y + radarCell - 3, color);
+                if (candidateIndex == selectedCandidate) {
+                    context.fill(x + 2, y + 2, x + radarCell - 5, y + radarCell - 5, 0xFFFFFFFF);
+                } else if (dx == 0 && dz == 0) {
+                    context.fill(x + 9, y + 9, x + radarCell - 12, y + radarCell - 12, 0xFF65D6FF);
+                }
+                if (candidateIndex >= 0) {
+                    context.drawTextWithShadow(textRenderer, Integer.toString(candidateIndex + 1),
+                            x + 10, y + 10, 0xFFFFFFFF);
+                }
+            }
+        }
+
+        int infoX = radarMapX + diameter * radarCell + 22;
+        context.drawTextWithShadow(textRenderer, "LEGEND", infoX, radarMapY, 0xFFE5EDF5);
+        context.fill(infoX, radarMapY + 20, infoX + 12, radarMapY + 32, 0xFFB94E55);
+        context.drawTextWithShadow(textRenderer, "High", infoX + 18, radarMapY + 21, 0xFFB8C7D9);
+        context.fill(infoX, radarMapY + 40, infoX + 12, radarMapY + 52, 0xFFB58A3E);
+        context.drawTextWithShadow(textRenderer, "Medium", infoX + 18, radarMapY + 41, 0xFFB8C7D9);
+        context.fill(infoX, radarMapY + 60, infoX + 12, radarMapY + 72, 0xFF547D9A);
+        context.drawTextWithShadow(textRenderer, "Low", infoX + 18, radarMapY + 61, 0xFFB8C7D9);
+        context.fill(infoX, radarMapY + 80, infoX + 12, radarMapY + 92, 0xFF263B4B);
+        context.drawTextWithShadow(textRenderer, "Loaded", infoX + 18, radarMapY + 81, 0xFFB8C7D9);
+
+        if (selectedCandidate >= 0 && selectedCandidate < results.size()) {
+            BaseFinderScanner.Candidate c = results.get(selectedCandidate);
+            int detailY = radarMapY + 112;
+            context.drawTextWithShadow(textRenderer, "SELECTED #" + (selectedCandidate + 1),
+                    infoX, detailY, 0xFF75E0A1);
+            context.drawTextWithShadow(textRenderer, c.confidence() + " score " + c.score(),
+                    infoX, detailY + 18, 0xFFFFC66D);
+            context.drawTextWithShadow(textRenderer, "X " + ((c.chunkX() << 4) + 8)
+                    + "  Y " + c.y() + "  Z " + ((c.chunkZ() << 4) + 8),
+                    infoX, detailY + 36, 0xFFE5EDF5);
+            context.drawTextWithShadow(textRenderer, "Chunk " + c.chunkX() + ", " + c.chunkZ(),
+                    infoX, detailY + 54, 0xFFB8C7D9);
+            context.drawTextWithShadow(textRenderer, "Storage " + c.containers() + "  Workstations " + c.workstations(),
+                    infoX, detailY + 72, 0xFFB8C7D9);
+            context.drawTextWithShadow(textRenderer, "Redstone " + c.redstone() + "  Doors " + c.doors(),
+                    infoX, detailY + 86, 0xFFB8C7D9);
+            context.drawTextWithShadow(textRenderer, "Crops " + c.crops() + "  Lights " + c.lighting()
+                    + (c.underground() ? "  Underground" : ""),
+                    infoX, detailY + 100, 0xFFB8C7D9);
+        } else {
+            context.drawTextWithShadow(textRenderer, "Candidates: " + results.size(),
+                    infoX, radarMapY + 112, 0xFFE5EDF5);
+            context.drawTextWithShadow(textRenderer, "Click a colored", infoX, radarMapY + 132, 0xFFB8C7D9);
+            context.drawTextWithShadow(textRenderer, "chunk to inspect it.", infoX, radarMapY + 146, 0xFFB8C7D9);
+        }
+
+        context.drawTextWithShadow(textRenderer, "Click a numbered marker to select its evidence.",
+                left + 16, top + panelHeight - 52, 0xFF8999AA);
+    }
+
+    @Override
+    public boolean mouseClicked(Click click, boolean doubled) {
+        double mouseX = click.x();
+        double mouseY = click.y();
+        if (tab == Tab.RADAR && click.button() == 0 && radarCell > 0) {
+            int column = (int) ((mouseX - radarMapX) / radarCell);
+            int row = (int) ((mouseY - radarMapY) / radarCell);
+            int diameter = radarRadius * 2 + 1;
+            if (column >= 0 && column < diameter && row >= 0 && row < diameter) {
+                int cellX = radarMapX + column * radarCell;
+                int cellY = radarMapY + row * radarCell;
+                // Ignore the 3px gaps between cells so clicks cannot select a neighboring chunk.
+                if (mouseX < cellX + radarCell - 3 && mouseY < cellY + radarCell - 3) {
+                    int chunkX = BaseFinderScanner.scanCenterX() + column - radarRadius;
+                    int chunkZ = BaseFinderScanner.scanCenterZ() + row - radarRadius;
+                    List<BaseFinderScanner.Candidate> results = BaseFinderScanner.candidates();
+                    for (int candidateIndex = 0; candidateIndex < results.size(); candidateIndex++) {
+                        BaseFinderScanner.Candidate candidate = results.get(candidateIndex);
+                        if (candidate.chunkX() == chunkX && candidate.chunkZ() == chunkZ) {
+                            selectedCandidate = candidateIndex;
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        return super.mouseClicked(click, doubled);
     }
 
     @Override
