@@ -1,7 +1,8 @@
 package com.austinwing.mcaibuild;
 
+import com.austinwing.mcaibuild.redstone.BearingMath;
+
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.util.math.MathHelper;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -13,8 +14,8 @@ public final class RedstoneSoundDetector {
     private static final ArrayDeque<Detection> RECENT = new ArrayDeque<>();
     private static final int MAX_HISTORY = 40;
     private static final int[] RANGES = {16, 32, 48, 64};
-    private static boolean enabled = true;
-    private static int rangeIndex = 2;
+    private static volatile boolean enabled = true;
+    private static volatile int rangeIndex = 2;
 
     private RedstoneSoundDetector() {}
 
@@ -60,8 +61,7 @@ public final class RedstoneSoundDetector {
         if (client.player == null) return 0;
         double dx = detection.x() - client.player.getX();
         double dz = detection.z() - client.player.getZ();
-        double worldBearing = Math.toDegrees(Math.atan2(dx, dz));
-        return MathHelper.wrapDegrees(-(worldBearing + client.player.getYaw()));
+        return BearingMath.relativeBearingDegrees(dx, dz, client.player.getYaw());
     }
 
     public static double horizontalDistance(Detection detection) {
@@ -78,9 +78,7 @@ public final class RedstoneSoundDetector {
         if (client.player == null) return "--";
         double dx = detection.x() - client.player.getX();
         double dz = detection.z() - client.player.getZ();
-        String[] directions = {"S", "SE", "E", "NE", "N", "NW", "W", "SW"};
-        int index = Math.floorMod((int) Math.round(Math.toDegrees(Math.atan2(dx, dz)) / 45.0), 8);
-        return directions[index];
+        return BearingMath.compass(dx, dz);
     }
 
     public static double distanceFromPlayer(Detection detection) {
