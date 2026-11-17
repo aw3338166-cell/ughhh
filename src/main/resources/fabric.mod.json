@@ -14,7 +14,8 @@
       "com.austinwing.mcaibuild.MinecraftAIBuild"
     ],
     "client": [
-      "com.austinwing.mcaibuild.SchematicBuilderClient"
+      "com.austinwing.mcaibuild.SchematicBuilderClient",
+      "com.austinwing.mcaibuild.SelectionAnalyzerClient"
     ]
   },
   "depends": {
