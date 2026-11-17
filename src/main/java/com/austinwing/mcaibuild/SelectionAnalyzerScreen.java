@@ -24,10 +24,9 @@ public final class SelectionAnalyzerScreen extends Screen {
         addDrawableChild(ButtonWidget.builder(Text.literal("Refresh"), button ->
                         SelectionAnalyzerClient.refresh(client))
                 .dimensions(left + 10, bottom, buttonWidth, 20).build());
-        addDrawableChild(ButtonWidget.builder(Text.literal("Clear selection"), button -> {
-                    SelectionAnalyzerClient.clearSelection();
-                    clearAndInit();
-                }).dimensions(left + 17 + buttonWidth, bottom, buttonWidth, 20).build());
+        addDrawableChild(ButtonWidget.builder(Text.literal("Clear selection"), button ->
+                        SelectionAnalyzerClient.clearSelection())
+                .dimensions(left + 17 + buttonWidth, bottom, buttonWidth, 20).build());
         addDrawableChild(ButtonWidget.builder(Text.literal("Close"), button -> close())
                 .dimensions(left + 24 + buttonWidth * 2, bottom, buttonWidth, 20).build());
     }
