@@ -1,5 +1,8 @@
 package com.austinwing.mcaibuild;
 
+import com.austinwing.mcaibuild.builder.SchematicTransform;
+import com.austinwing.mcaibuild.materials.MaterialMath;
+
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
@@ -133,8 +136,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
                             return 1;
                         }))
                         .then(ClientCommandManager.literal("rotate").executes(context -> {
-                            rotation = (rotation + 1) % 4;
-                            tell(MinecraftClient.getInstance(), "Schematic rotation: " + (rotation * 90) + " degrees.");
+                            rotateSchematic(MinecraftClient.getInstance());
                             return 1;
                         }))));
         WorldRenderEvents.AFTER_ENTITIES.register(SchematicBuilderClient::renderBlueprint);
@@ -189,7 +191,7 @@ public final class SchematicBuilderClient implements ClientModInitializer {
         if (detectorKey.wasPressed() && client.currentScreen == null) openRedstoneDetector();
         if (worldIntelKey.wasPressed() && client.currentScreen == null) openWorldIntel();
         if (dashboardKey.wasPressed() && client.currentScreen == null) client.setScreen(new BuildDashboardScreen());
-        if (rotateKey.wasPressed()) { rotation = (rotation + 1) % 4; tell(client, "Schematic rotation: " + (rotation * 90) + " degrees."); }
+        if (rotateKey.wasPressed()) rotateSchematic(client);
         if (layerModeKey.wasPressed()) { layerMode = !layerMode; tell(client, "Layer-by-layer mode " + (layerMode ? "enabled" : "disabled") + "."); }
         if (ghostKey.wasPressed()) { ghostPreview = !ghostPreview; tell(client, "Ghost preview " + (ghostPreview ? "enabled (transparent textured blocks)" : "disabled (solid textured blocks)") + "."); }
         if (snakeOrderKey.wasPressed()) {
@@ -393,9 +395,9 @@ public final class SchematicBuilderClient implements ClientModInitializer {
 
     private static BlockState schematicState(Block block, SchematicData.BlockEntry entry) {
         BlockState state = block.getDefaultState();
-        for (Map.Entry<String, String> item : entry.properties().entrySet()) {
+        for (Map.Entry<String, String> item : SchematicTransform.rotateProperties(rotation, entry.properties()).entrySet()) {
             Property<?> property = state.getBlock().getStateManager().getProperty(item.getKey());
-            if (property != null) state = applyProperty(state, property, rotateProperty(item.getKey(), item.getValue()));
+            if (property != null) state = applyProperty(state, property, item.getValue());
         }
         return state;
     }
@@ -407,47 +409,13 @@ public final class SchematicBuilderClient implements ClientModInitializer {
     }
 
     private static String rotateProperty(String key, String value) {
-        if (rotation == 0) return value;
-        if (key.equals("facing")) {
-            try {
-                Direction direction = Direction.valueOf(value.toUpperCase(java.util.Locale.ROOT));
-                for (int i = 0; i < rotation; i++) direction = direction.rotateYClockwise();
-                return direction.asString();
-            } catch (IllegalArgumentException ignored) { return value; }
-        }
-        if (key.equals("axis") && rotation % 2 == 1) {
-            if (value.equals("x")) return "z";
-            if (value.equals("z")) return "x";
-        }
-        if (key.equals("shape") && rotation % 2 == 1) {
-            if (value.equals("inner_left")) return "inner_right";
-            if (value.equals("inner_right")) return "inner_left";
-            if (value.equals("outer_left")) return "outer_right";
-            if (value.equals("outer_right")) return "outer_left";
-        }
-        if (key.equals("rotation")) {
-            try { return Integer.toString((Integer.parseInt(value) + rotation * 4) % 16); }
-            catch (NumberFormatException ignored) { return value; }
-        }
-        return value;
+        return SchematicTransform.rotateProperty(rotation, key, value);
     }
-
     private static int rotatedX(SchematicData.BlockEntry entry) {
-        return switch (rotation) {
-            case 1 -> schematic.length() - 1 - entry.z();
-            case 2 -> schematic.width() - 1 - entry.x();
-            case 3 -> entry.z();
-            default -> entry.x();
-        };
+        return SchematicTransform.rotatedX(rotation, schematic.width(), schematic.length(), entry.x(), entry.z());
     }
-
     private static int rotatedZ(SchematicData.BlockEntry entry) {
-        return switch (rotation) {
-            case 1 -> entry.x();
-            case 2 -> schematic.length() - 1 - entry.z();
-            case 3 -> schematic.width() - 1 - entry.x();
-            default -> entry.z();
-        };
+        return SchematicTransform.rotatedZ(rotation, schematic.width(), schematic.length(), entry.x(), entry.z());
     }
 
     private static void renderBlueprint(WorldRenderContext context) {
@@ -544,7 +512,9 @@ public final class SchematicBuilderClient implements ClientModInitializer {
     private static void showMaterialPreview(MinecraftClient client) {
         Map<String, Integer> required = new HashMap<>();
         for (SchematicData.BlockEntry entry : schematic.blocks()) {
-            if (!SchematicReader.isAirBlockId(entry.blockId())) required.merge(entry.blockId(), 1, Integer::sum);
+            if (SchematicReader.isAirBlockId(entry.blockId())) continue;
+            int count = MaterialMath.itemCount(entry.blockId(), entry.properties());
+            if (count > 0) required.merge(itemIdForBlock(entry.blockId()), count, Integer::sum);
         }
         List<String> missing = new ArrayList<>();
         for (Map.Entry<String, Integer> entry : required.entrySet()) {
@@ -557,11 +527,21 @@ public final class SchematicBuilderClient implements ClientModInitializer {
             if (shortBy > 0) missing.add(entry.getKey() + " x" + shortBy);
         }
         missing.sort(String::compareTo);
-        if (missing.isEmpty()) tell(client, "Hotbar material check: all required block items appear available.");
+        if (missing.isEmpty()) tell(client, "Hotbar material check: all required items appear available.");
         else tell(client, "Hotbar shortages (first 8): " + String.join(", ", missing.subList(0, Math.min(8, missing.size()))) + (missing.size() > 8 ? " ... and " + (missing.size() - 8) + " more types." : ""));
     }
 
+    static String itemIdForBlock(String blockId) {
+        try {
+            Block block = Registries.BLOCK.get(Identifier.of(blockId));
+            if (block == net.minecraft.block.Blocks.AIR) return blockId;
+            net.minecraft.item.Item item = block.asItem();
+            return item == net.minecraft.item.Items.AIR ? blockId : Registries.ITEM.getId(item).toString();
+        } catch (RuntimeException ignored) { return blockId; }
+    }
+
     private static int findHotbarItem(MinecraftClient client, String blockId) {
+        String itemId = itemIdForBlock(blockId);
         // Prefer an existing hotbar stack. If the item is elsewhere in the main
         // inventory, swap it into the first hotbar slot so the builder can use it.
         for (int slot = 0; slot < 9; slot++) {
@@ -708,9 +688,11 @@ public final class SchematicBuilderClient implements ClientModInitializer {
 
     public static void dashboardOpenMaterials() { openMaterials(); }
 
-    public static void dashboardRotate() {
-        rotation = (rotation + 1) % 4;
-        tell(MinecraftClient.getInstance(), "Schematic rotation: " + (rotation * 90) + " degrees.");
+    public static void dashboardRotate() { rotateSchematic(MinecraftClient.getInstance()); }
+    private static void rotateSchematic(MinecraftClient client) {
+        if (running) { tell(client, "Stop the build before rotating; changing rotation mid-build would move remaining targets."); return; }
+        rotation = SchematicTransform.normalize(rotation + 1);
+        tell(client, "Schematic rotation: " + (rotation * 90) + " degrees.");
     }
 
     public static void dashboardToggleLayerMode() {
