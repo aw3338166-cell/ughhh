@@ -1,6 +1,7 @@
 package com.austinwing.mcaibuild;
 
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -274,26 +275,32 @@ public final class WorldIntelScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (tab == Tab.RADAR && button == 0 && radarCell > 0) {
-            List<BaseFinderScanner.Candidate> results = BaseFinderScanner.candidates();
-            int dx = (int) ((mouseX - radarMapX) / radarCell) - radarRadius;
-            int dz = (int) ((mouseY - radarMapY) / radarCell) - radarRadius;
-            if (mouseX >= radarMapX && mouseY >= radarMapY
-                    && dx >= -radarRadius && dx <= radarRadius
-                    && dz >= -radarRadius && dz <= radarRadius) {
-                int chunkX = BaseFinderScanner.scanCenterX() + dx;
-                int chunkZ = BaseFinderScanner.scanCenterZ() + dz;
-                for (int i = 0; i < results.size(); i++) {
-                    BaseFinderScanner.Candidate c = results.get(i);
-                    if (c.chunkX() == chunkX && c.chunkZ() == chunkZ) {
-                        selectedCandidate = i;
-                        return true;
+    public boolean mouseClicked(Click click, boolean doubled) {
+        double mouseX = click.x();
+        double mouseY = click.y();
+        if (tab == Tab.RADAR && click.button() == 0 && radarCell > 0) {
+            int column = (int) ((mouseX - radarMapX) / radarCell);
+            int row = (int) ((mouseY - radarMapY) / radarCell);
+            int diameter = radarRadius * 2 + 1;
+            if (column >= 0 && column < diameter && row >= 0 && row < diameter) {
+                int cellX = radarMapX + column * radarCell;
+                int cellY = radarMapY + row * radarCell;
+                // Ignore the 3px gaps between cells so clicks cannot select a neighboring chunk.
+                if (mouseX < cellX + radarCell - 3 && mouseY < cellY + radarCell - 3) {
+                    int chunkX = BaseFinderScanner.scanCenterX() + column - radarRadius;
+                    int chunkZ = BaseFinderScanner.scanCenterZ() + row - radarRadius;
+                    List<BaseFinderScanner.Candidate> results = BaseFinderScanner.candidates();
+                    for (int candidateIndex = 0; candidateIndex < results.size(); candidateIndex++) {
+                        BaseFinderScanner.Candidate candidate = results.get(candidateIndex);
+                        if (candidate.chunkX() == chunkX && candidate.chunkZ() == chunkZ) {
+                            selectedCandidate = candidateIndex;
+                            return true;
+                        }
                     }
                 }
             }
         }
-        return super.mouseClicked(mouseX, mouseY, button);
+        return super.mouseClicked(click, doubled);
     }
 
     @Override
