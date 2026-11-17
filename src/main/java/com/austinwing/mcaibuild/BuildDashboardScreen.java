@@ -1,6 +1,5 @@
 package com.austinwing.mcaibuild;
 
-import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -148,10 +147,8 @@ public final class BuildDashboardScreen extends Screen {
         context.drawTextWithShadow(textRenderer, percent + "% indexed",
                 progressX, barTop + 14, MUTED);
 
-        context.drawTextWithShadow(textRenderer, "BUILD CONTROLS",
+        context.drawTextWithShadow(textRenderer, "QUICK ACTIONS",
                 panelLeft + 16, panelTop + 151, ACCENT);
-        context.drawTextWithShadow(textRenderer, "WORLD TOOLS",
-                panelLeft + 16, panelTop + 335, ACCENT);
         context.drawTextWithShadow(textRenderer, "H  Dashboard",
                 panelLeft + 16, panelTop + panelHeight - 20, MUTED);
         context.drawTextWithShadow(textRenderer, "Keybinds can be changed in Controls",
