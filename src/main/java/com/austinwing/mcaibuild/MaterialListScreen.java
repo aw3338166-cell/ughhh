@@ -1,5 +1,7 @@
 package com.austinwing.mcaibuild;
 
+import com.austinwing.mcaibuild.materials.MaterialMath;
+
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -107,7 +109,8 @@ public final class MaterialListScreen extends Screen {
         Map<String, Integer> required = new HashMap<>();
         for (SchematicData.BlockEntry entry : schematic.blocks()) {
             if (SchematicReader.isAirBlockId(entry.blockId())) continue;
-            required.merge(entry.blockId(), 1, Integer::sum);
+            int itemCount = MaterialMath.itemCount(entry.blockId(), entry.properties());
+            if (itemCount > 0) required.merge(entry.blockId(), itemCount, Integer::sum);
         }
 
         for (Map.Entry<String, Integer> manual : MANUAL_REQUIREMENTS.entrySet()) {
